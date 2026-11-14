@@ -3,7 +3,7 @@
  * Connects Frontend UI to PHP/MySQL REST Backend with Graceful Fallback
  */
 
-import { apiFetch } from '../config/api'
+import { apiFetch, API_BASE_URL } from '../config/api'
 import {
   filterBrands,
   filterCategories,
@@ -323,7 +323,7 @@ export const orderService = {
       return {
         url: typeof fileOrBase64 === 'string' && fileOrBase64.startsWith('data:')
           ? fileOrBase64
-          : '/citypet/api/uploads/slips/sample_slip.png',
+          : `${API_BASE_URL}/uploads/slips/sample_slip.png`,
         filename: fileOrBase64?.name || 'bank_slip.jpg',
         size: fileOrBase64?.size || 102400,
         type: 'image',

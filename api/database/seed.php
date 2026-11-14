@@ -21,8 +21,24 @@ if (!$pdo) {
 }
 
 try {
-    // 1. Run Schema SQL
+    // Prevent re-seeding over HTTP if database is already initialized
+    if (php_sapi_name() !== 'cli') {
+        $hasUsersTable = $pdo->query("SHOW TABLES LIKE 'users'")->fetchColumn();
+        if ($hasUsersTable) {
+            $userCount = (int) $pdo->query("SELECT COUNT(*) FROM `users`")->fetchColumn();
+            if ($userCount > 0) {
+                jsonResponse([
+                    'status' => 'already_initialized',
+                    'database' => getenv('DB_NAME') ?: 'citypet_db',
+                    'users_count' => $userCount,
+                ], 200, 'Database is already initialized.');
+            }
+        }
+    }
+
+    // 1. Run Schema SQL (use currently connected DB rather than hardcoded citypet_db)
     $schemaSql = file_get_contents(__DIR__ . '/schema.sql');
+    $schemaSql = preg_replace('/CREATE DATABASE IF NOT EXISTS `citypet_db`[^;]*;|USE `citypet_db`;/i', '', $schemaSql);
     $pdo->exec($schemaSql);
 
     // 2. Clear existing sample data for clean re-seeding

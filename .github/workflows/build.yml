@@ -1,4 +1,4 @@
-name: Build and deploy CityPet
+name: Build and deploy CityPet (Namecheap)
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       deploy_staging:
-        description: Upload to private staging over SFTP
+        description: Deploy to Namecheap over SFTP
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -27,24 +27,33 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Build frontend for /citypet/
-        run: npm run build -- --base=/citypet/
+      - name: Build frontend for citypet.kasunwalakumbura.com
+        run: npm run build -- --base="${{ vars.VITE_BASE_PATH || '/' }}"
       - name: Check PHP syntax
         run: find api -type f -name '*.php' -print0 | xargs -0 -r -n 1 php -l
       - name: Assemble hosting files
         run: |
-          mkdir -p release/citypet/api
+          mkdir -p release/citypet/api/database release/citypet/api/uploads/products release/citypet/api/uploads/slips release/citypet/api/uploads/profile
           cp -R dist/. release/citypet/
           cp api/*.php release/citypet/api/
           cp -R api/admin api/config release/citypet/api/
+          cp api/database/schema.sql api/database/product_features.sql api/database/seed.php release/citypet/api/database/
+          cat <<'HTACCESS' > release/citypet/api/uploads/products/.htaccess
+          Options -Indexes -ExecCGI
+          RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phar
+          <FilesMatch "\.(php|phtml|phar|cgi|pl|sh)$">
+            Require all denied
+          </FilesMatch>
+          HTACCESS
       - uses: actions/upload-artifact@v7
         with:
           name: citypet-hosting
           path: release/
+          include-hidden-files: true
           if-no-files-found: error
 
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy_staging }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_staging)) }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -57,39 +66,100 @@ jobs:
         with:
           name: citypet-hosting
           path: release
-      - name: Upload CityPet over SFTP
+      - name: Upload CityPet to Namecheap over SFTP
         env:
-          SFTP_HOST: ${{ vars.SFTP_HOST }}
-          SFTP_USER: ${{ vars.SFTP_USER }}
-          SFTP_PORT: ${{ vars.SFTP_PORT || '22' }}
-          SFTP_TARGET: ${{ vars.SFTP_TARGET }}
+          SFTP_HOST: ${{ vars.SFTP_HOST || secrets.SFTP_HOST || 'citypet.kasunwalakumbura.com' }}
+          SFTP_USER: ${{ vars.SFTP_USER || secrets.SFTP_USER || 'kasuormb' }}
+          SFTP_PORT: ${{ vars.SFTP_PORT || secrets.SFTP_PORT || '21098' }}
+          SFTP_TARGET: ${{ vars.SFTP_TARGET || secrets.SFTP_TARGET || 'citypet.kasunwalakumbura.com' }}
           SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
-          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          SFTP_KEY_PASSPHRASE: ${{ secrets.SFTP_KEY_PASSPHRASE }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS || vars.SFTP_KNOWN_HOSTS }}
+          DB_HOST: ${{ vars.DB_HOST || secrets.DB_HOST || 'localhost' }}
+          DB_PORT: ${{ vars.DB_PORT || secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ vars.DB_NAME || secrets.DB_NAME || 'kasuormb_Citypet' }}
+          DB_USER: ${{ vars.DB_USER || secrets.DB_USER || 'kasuormb_citypet' }}
+          DB_PASS: ${{ secrets.DB_PASS }}
         run: |
           set -euo pipefail
           if [[ ! "$SFTP_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ||
                 ! "$SFTP_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ||
                 ! "$SFTP_PORT" =~ ^[1-9][0-9]{0,4}$ ||
-                ! "$SFTP_TARGET" =~ ^[A-Za-z0-9_./-]+/citypet$ ||
+                ! "$SFTP_TARGET" =~ ^[A-Za-z0-9_./-]+$ ||
                 "/$SFTP_TARGET/" == */../* ||
-                -z "$SFTP_PRIVATE_KEY" || -z "$SFTP_KNOWN_HOSTS" ]]; then
-            echo "::error::Configure the staging SFTP variables and secrets before deploying."
+                -z "$SFTP_PRIVATE_KEY" ]]; then
+            echo "::error::Configure Namecheap SFTP_HOST, SFTP_USER, and SFTP_PRIVATE_KEY in GitHub Secrets/Variables before deploying."
             exit 1
+          fi
+
+          if [[ -n "$DB_NAME" && -n "$DB_USER" ]]; then
+            php -r '
+              $vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS"];
+              $lines = ["<?php", "declare(strict_types=1);"];
+              foreach ($vars as $k) {
+                  $v = getenv($k);
+                  if ($v !== false && $v !== "") {
+                      $lines[] = "putenv(" . var_export($k . "=" . $v, true) . ");";
+                  }
+              }
+              file_put_contents("release/citypet/api/config/env.local.php", implode("\n", $lines) . "\n");
+            '
+            php -l release/citypet/api/config/env.local.php
           fi
 
           umask 077
           ssh_files=$(mktemp -d)
-          trap 'rm -f "$ssh_files/key" "$ssh_files/known_hosts"; rmdir "$ssh_files"' EXIT
-          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$ssh_files/key"
-          printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$ssh_files/known_hosts"
+          cleanup() {
+            if [[ -n "${SSH_AGENT_PID:-}" ]]; then
+              kill "$SSH_AGENT_PID" >/dev/null 2>&1 || true
+            fi
+            rm -rf "$ssh_files"
+          }
+          trap cleanup EXIT
 
-          sftp -b - -P "$SFTP_PORT" -i "$ssh_files/key" \
-            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$ssh_files/key"
+          chmod 600 "$ssh_files/key"
+
+          if [[ -n "$SFTP_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$ssh_files/known_hosts"
+          else
+            echo "::notice::SFTP_KNOWN_HOSTS not set; fetching host key from $SFTP_HOST:$SFTP_PORT via ssh-keyscan."
+            ssh-keyscan -p "$SFTP_PORT" -H "$SFTP_HOST" > "$ssh_files/known_hosts" 2>/dev/null
+          fi
+
+          sftp_auth_args=(-i "$ssh_files/key" -o IdentitiesOnly=yes)
+          if [[ -n "$SFTP_KEY_PASSPHRASE" ]]; then
+            eval "$(ssh-agent -s)" >/dev/null
+            cat <<'ASKPASS' > "$ssh_files/askpass.sh"
+          #!/usr/bin/env bash
+          printf '%s\n' "$SFTP_KEY_PASSPHRASE"
+          ASKPASS
+            chmod 700 "$ssh_files/askpass.sh"
+            DISPLAY=:0 SSH_ASKPASS="$ssh_files/askpass.sh" SSH_ASKPASS_REQUIRE=force ssh-add "$ssh_files/key" </dev/null >/dev/null
+            sftp_auth_args=()
+          fi
+
+          sftp -b - -P "$SFTP_PORT" "${sftp_auth_args[@]}" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$ssh_files/known_hosts" \
             -- "$SFTP_USER@$SFTP_HOST" <<SFTP
+          -mkdir "$SFTP_TARGET"
           cd "$SFTP_TARGET"
+          -mkdir assets
+          -mkdir api
+          -mkdir api/admin
+          -mkdir api/config
+          -mkdir api/database
+          -mkdir api/uploads
+          -mkdir api/uploads/products
+          -mkdir api/uploads/slips
+          -mkdir api/uploads/profile
           lcd release/citypet
           put -R assets
           put -R api
           put index.html
           SFTP
+
+          echo "Initializing database (if not yet seeded) and verifying health..."
+          curl -fsSL "https://citypet.kasunwalakumbura.com/api/database/seed.php" || true
+          curl -fsSL "https://citypet.kasunwalakumbura.com/api/health.php" || true

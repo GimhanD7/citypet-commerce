@@ -5,6 +5,10 @@
 
 declare(strict_types=1);
 
+if (is_file(__DIR__ . '/env.local.php')) {
+    require_once __DIR__ . '/env.local.php';
+}
+
 class Database {
     private static ?PDO $pdo = null;
 

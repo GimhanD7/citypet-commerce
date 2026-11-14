@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import ProductVisual from '../common/ProductVisual'
 import checkoutHeroPets from '../../assets/checkout-hero-pets.jpg'
+import { API_BASE_URL } from '../../config/api'
 import { orderService, authService } from '../../services/api'
 
 const cartItemKey = (product) =>
@@ -583,7 +584,7 @@ export default function CheckoutPage({
           merchant_id: hashRes.merchantId || '1211149',
           return_url: window.location.href,
           cancel_url: window.location.href,
-          notify_url: window.location.origin + '/citypet/api/payhere.php',
+          notify_url: `${window.location.origin}${API_BASE_URL}/payhere.php`,
           order_id: tempOrderSeq,
           items: `City Pet Veterinary Pharmacy Order (${cartItems.length} items)`,
           amount: Number(total).toFixed(2),

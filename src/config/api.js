@@ -8,7 +8,10 @@
 
 // Always relative — Vite proxy handles the :5173 → :80 rewrite in dev
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || '/citypet/api'
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api`
+    : '/citypet/api')
 
 
 /**

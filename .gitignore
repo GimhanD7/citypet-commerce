@@ -5,6 +5,7 @@ dist
 .env
 .env.*
 !.env.example
+/api/config/env.local.php
 /api/uploads/
 /api/database/*backup*.sql
 /api/database/*.sql.gz

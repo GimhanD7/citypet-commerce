@@ -28,17 +28,49 @@ npm run build
 
 The build output will be created in `dist/`.
 
-## Deploy to private staging
+## Deploy to Namecheap (`citypet.kasunwalakumbura.com`) via GitHub Actions
 
-Push the repository to GitHub. The **Build and deploy CityPet** workflow builds the frontend for `/citypet/` and checks PHP syntax on pushes and pull requests to `main`.
+Pushing to `main` (or running the workflow manually) triggers [`.github/workflows/build.yml`](.github/workflows/build.yml), which builds the frontend for `https://citypet.kasunwalakumbura.com/`, checks PHP syntax, and deploys to Namecheap over SFTP (port `21098`).
 
-1. On a private staging host with PHP, `pdo_mysql`, and MySQL, create the web directory for `/citypet/` and give the SFTP account write access. Configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASS` in the host's PHP environment. For a new database, import [schema.sql](api/database/schema.sql) into the database assigned by your host. Adjust its initial `CREATE DATABASE` and `USE` statements for that database and your account permissions.
-2. In the GitHub repository's **Settings → Secrets and variables → Actions**, add the variables `SFTP_HOST`, `SFTP_USER`, and `SFTP_TARGET` (for example, `public_html/citypet`). Set `SFTP_PORT` if your host uses a port other than 22.
-3. Add the repository secrets `SFTP_PRIVATE_KEY` and `SFTP_KNOWN_HOSTS`. Authorize the matching public key on the host and use the host's verified SSH host key in OpenSSH known_hosts format.
-4. Go to **Actions → Build and deploy CityPet → Run workflow**, select `main`, and check **Upload to private staging over SFTP**.
-5. After deployment, visit `/citypet/` and confirm that `/citypet/api/health.php` reports the database as connected.
+### 1. Namecheap cPanel Setup
 
-The upload updates frontend and API code in place. Database setup and uploaded media are managed on the host. Keep staging private while the API accepts the fixed demo login code.
+1. **Create Subdomain**:
+   - In **cPanel → Domains → Create A New Domain**, enter `citypet.kasunwalakumbura.com` (uncheck "Share document root" so its document root is `citypet.kasunwalakumbura.com`, or note the document root path you choose).
+2. **Enable SSH & Authorize Key**:
+   - In Namecheap **cPanel → Exclusive for Namecheap Customers → Manage Shell** (or **SSH Access**), enable SSH access (port `21098`).
+   - Go to **SSH Access → Manage SSH Keys → Generate a New Key** (or **Import Key**), click **Manage** next to your public key, and click **Authorize**.
+   - Download/copy the **Private Key** for GitHub Secrets.
+3. **Create MySQL Database**:
+   - In **cPanel → MySQL® Databases**, create a database (e.g. `cpaneluser_citypet`) and a MySQL user (e.g. `cpaneluser_admin`), then add the user to the database with **ALL PRIVILEGES**.
+   - In **cPanel → phpMyAdmin**, select your new database and import [`api/database/schema.sql`](api/database/schema.sql) and [`api/database/product_features.sql`](api/database/product_features.sql) (remove or adjust the top `CREATE DATABASE` / `USE` lines in `schema.sql` so it imports into your cPanel-prefixed database).
+
+### 2. GitHub Repository Variables & Secrets
+
+In your GitHub repository, open **Settings → Secrets and variables → Actions**:
+
+**Variables (or Secrets):**
+| Name | Example Value | Notes |
+| :--- | :--- | :--- |
+| `SFTP_HOST` | `citypet.kasunwalakumbura.com` (or Namecheap server hostname) | Namecheap server hostname |
+| `SFTP_USER` | `cpaneluser` | Your Namecheap cPanel username |
+| `SFTP_PORT` | `21098` | Optional (defaults to `21098`) |
+| `SFTP_TARGET` | `citypet.kasunwalakumbura.com` | Document root for the subdomain in cPanel (or `public_html/citypet` if configured there) |
+| `DB_HOST` | `localhost` | Optional (defaults to `localhost`) |
+| `DB_NAME` | `cpaneluser_citypet` | Namecheap MySQL database name |
+| `DB_USER` | `cpaneluser_admin` | Namecheap MySQL username |
+
+**Secrets:**
+| Name | Value | Notes |
+| :--- | :--- | :--- |
+| `SFTP_PRIVATE_KEY` | Full contents of your private SSH key (`-----BEGIN ...`) | Required |
+| `SFTP_KEY_PASSPHRASE` | Passphrase for your SSH key | Optional (only needed if your key has a passphrase) |
+| `DB_PASS` | Your MySQL user password | Injects `api/config/env.local.php` during deploy |
+| `SFTP_KNOWN_HOSTS` | Output of `ssh-keyscan -p 21098 your-host` | Optional (auto-fetched via `ssh-keyscan` if omitted) |
+
+### 3. Deploy & Verify
+
+1. Push to `main` (or go to **Actions → Build and deploy CityPet (Namecheap) → Run workflow**).
+2. Visit `https://citypet.kasunwalakumbura.com/` and verify `https://citypet.kasunwalakumbura.com/api/health.php` reports `"database": "connected"`.
 
 ## Important content note
 
