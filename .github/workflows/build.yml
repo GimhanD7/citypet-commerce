@@ -1,0 +1,95 @@
+name: Build and deploy CityPet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: Upload to private staging over SFTP
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build frontend for /citypet/
+        run: npm run build -- --base=/citypet/
+      - name: Check PHP syntax
+        run: find api -type f -name '*.php' -print0 | xargs -0 -r -n 1 php -l
+      - name: Assemble hosting files
+        run: |
+          mkdir -p release/citypet/api
+          cp -R dist/. release/citypet/
+          cp api/*.php release/citypet/api/
+          cp -R api/admin api/config release/citypet/api/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: citypet-hosting
+          path: release/
+          if-no-files-found: error
+
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy_staging }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    concurrency:
+      group: citypet-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: citypet-hosting
+          path: release
+      - name: Upload CityPet over SFTP
+        env:
+          SFTP_HOST: ${{ vars.SFTP_HOST }}
+          SFTP_USER: ${{ vars.SFTP_USER }}
+          SFTP_PORT: ${{ vars.SFTP_PORT || '22' }}
+          SFTP_TARGET: ${{ vars.SFTP_TARGET }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SFTP_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ||
+                ! "$SFTP_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ||
+                ! "$SFTP_PORT" =~ ^[1-9][0-9]{0,4}$ ||
+                ! "$SFTP_TARGET" =~ ^[A-Za-z0-9_./-]+/citypet$ ||
+                "/$SFTP_TARGET/" == */../* ||
+                -z "$SFTP_PRIVATE_KEY" || -z "$SFTP_KNOWN_HOSTS" ]]; then
+            echo "::error::Configure the staging SFTP variables and secrets before deploying."
+            exit 1
+          fi
+
+          umask 077
+          ssh_files=$(mktemp -d)
+          trap 'rm -f "$ssh_files/key" "$ssh_files/known_hosts"; rmdir "$ssh_files"' EXIT
+          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$ssh_files/key"
+          printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$ssh_files/known_hosts"
+
+          sftp -b - -P "$SFTP_PORT" -i "$ssh_files/key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_files/known_hosts" \
+            -- "$SFTP_USER@$SFTP_HOST" <<SFTP
+          cd "$SFTP_TARGET"
+          lcd release/citypet
+          put -R assets
+          put -R api
+          put index.html
+          SFTP

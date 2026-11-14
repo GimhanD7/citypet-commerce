@@ -1,0 +1,11 @@
+node_modules
+dist
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+/api/uploads/
+/api/database/*backup*.sql
+/api/database/*.sql.gz
+/tests/runtime-*/

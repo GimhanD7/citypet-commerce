@@ -1,0 +1,25 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/config/cors.php';
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/session.php';
+$pdo = Database::getConnection();
+if (!$pdo) jsonError('Database unavailable.', 503);
+currentSessionUser($pdo, true);
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') jsonError('Method not allowed.', 405);
+checkProductCsrf($_POST);
+$file = $_FILES['file'] ?? null;
+if (!$file || !is_scalar($file['error']) || $file['error'] !== UPLOAD_ERR_OK) jsonError('Upload failed. Check the file size and try again.', 422);
+$mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+$types = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'video/mp4' => 'mp4', 'video/webm' => 'webm'];
+if (!isset($types[$mime])) jsonError('Use JPG, PNG, WebP, MP4 or WebM files.', 422);
+$kind = str_starts_with($mime, 'image/') ? 'image' : 'video';
+$limit = $kind === 'image' ? 5 * 1024 * 1024 : 20 * 1024 * 1024;
+if ($file['size'] <= 0 || $file['size'] > $limit) jsonError('Images must be under 5 MB and videos under 20 MB.', 422);
+if ($kind === 'image' && !getimagesize($file['tmp_name'])) jsonError('Invalid image.', 422);
+$directory = __DIR__ . '/uploads/products';
+if (!is_dir($directory) && !mkdir($directory, 0755, true)) jsonError('Unable to prepare upload storage.', 500);
+$filename = bin2hex(random_bytes(16)) . '.' . $types[$mime];
+if (!move_uploaded_file($file['tmp_name'], $directory . '/' . $filename)) jsonError('Unable to save upload.', 500);
+$base = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+jsonResponse(['url' => $base . '/uploads/products/' . $filename, 'type' => $kind], 201);
