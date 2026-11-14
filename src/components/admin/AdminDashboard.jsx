@@ -93,7 +93,8 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
 
   // Orders & Clinical Patients States
   const [recentOrders, setRecentOrders] = useState(defaultRecentOrders)
-  const [recentPatients] = useState(defaultPatients)
+  const [recentPatients, setRecentPatients] = useState(defaultPatients)
+  const [dashboardStats, setDashboardStats] = useState(null)
   const stockUpdateInFlight = useRef(new Set())
 
   // Quick Stock Quantity Increment/Decrement Handler (supports variant-level restocking)
@@ -198,9 +199,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
         const data = await productService.getProducts()
         if (mounted && data) {
           const list = Array.isArray(data) ? data : data.products || []
-          if (list.length > 0) {
-            setAdminProducts(list)
-          }
+          setAdminProducts(list)
         }
       } catch (err) {
         console.warn('Failed to load products for admin:', err)
@@ -219,9 +218,9 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
       try {
         const stats = await adminService.getDashboardStats()
         if (mounted && stats) {
-          if (stats.recentOrders && stats.recentOrders.length > 0) {
-            setRecentOrders(stats.recentOrders)
-          }
+          setDashboardStats(stats)
+          setRecentOrders(Array.isArray(stats.recentOrders) ? stats.recentOrders : [])
+          setRecentPatients(Array.isArray(stats.recentPatients) ? stats.recentPatients : [])
         }
       } catch (err) {
         console.warn('Admin dashboard fetch error:', err)
@@ -231,7 +230,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [activeTab])
 
   // Product CRUD Handlers
   const handleOpenAddProduct = () => {
@@ -468,6 +467,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
         <main className="admin-main-canvas">
           {activeTab === 'dashboard' ? (
             <DashboardOverview
+              dashboardStats={dashboardStats}
               recentOrders={recentOrders}
               recentPatients={recentPatients}
               setActiveTab={setActiveTab}

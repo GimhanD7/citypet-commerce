@@ -1,26 +1,23 @@
 import React, { useState } from 'react'
 import {
   CheckCircle2,
-  Heart,
   Package,
   PawPrint,
-  Phone,
-  ShieldCheck,
   User,
   X,
 } from 'lucide-react'
 
-export default function AccountModal({ isOpen, onClose }) {
+export default function AccountModal({ isOpen, onClose, authUser = null }) {
   const [activeTab, setActiveTab] = useState('profile')
   const [saved, setSaved] = useState(false)
   const [formData, setFormData] = useState({
-    ownerName: 'Kasun Perera',
-    phone: '077 123 4567',
-    email: 'kasun.perera@example.com',
-    petName: 'Milo',
-    petType: 'Golden Retriever',
-    petAge: '2 Years',
-    address: 'No. 45, Temple Road, Athurugiriya',
+    ownerName: authUser?.name || '',
+    phone: authUser?.phone || '',
+    email: authUser?.email || '',
+    petName: '',
+    petType: '',
+    petAge: '',
+    address: authUser?.addressLine1 || '',
   })
 
   if (!isOpen) return null
@@ -41,7 +38,7 @@ export default function AccountModal({ isOpen, onClose }) {
               <User size={28} />
             </div>
             <div>
-              <h3>{formData.ownerName || 'Pet Parent'}</h3>
+              <h3>{formData.ownerName || authUser?.name || 'Pet Parent'}</h3>
               <p>City Pet Club Member · {formData.petName ? `Parent of ${formData.petName} 🐾` : 'Sri Lanka'}</p>
             </div>
           </div>
@@ -62,7 +59,7 @@ export default function AccountModal({ isOpen, onClose }) {
             className={`account-tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
             onClick={() => setActiveTab('orders')}
           >
-            <Package size={16} /> Recent Orders (1)
+            <Package size={16} /> Recent Orders
           </button>
         </div>
 
@@ -80,7 +77,7 @@ export default function AccountModal({ isOpen, onClose }) {
                     type="text"
                     value={formData.petName}
                     onChange={(e) => setFormData({ ...formData, petName: e.target.value })}
-                    placeholder="e.g. Milo"
+                    placeholder="Enter pet name"
                   />
                 </div>
                 <div className="form-field">
@@ -89,7 +86,7 @@ export default function AccountModal({ isOpen, onClose }) {
                     type="text"
                     value={formData.petType}
                     onChange={(e) => setFormData({ ...formData, petType: e.target.value })}
-                    placeholder="e.g. Labrador / Persian Cat"
+                    placeholder="Enter breed or species"
                   />
                 </div>
               </div>
@@ -140,36 +137,9 @@ export default function AccountModal({ isOpen, onClose }) {
             </form>
           ) : (
             <div className="recent-orders-list">
-              <div className="order-history-card">
-                <div className="order-card-header">
-                  <div>
-                    <span className="order-id">Order #CP-8921</span>
-                    <span className="order-date">Placed yesterday</span>
-                  </div>
-                  <span className="order-status-badge">🚚 Dispatched</span>
-                </div>
-                <div className="order-card-items">
-                  <div className="order-item-mini">
-                    <span>1x Royal Canin Mini Adult 2kg</span>
-                    <b>LKR 7,950</b>
-                  </div>
-                  <div className="order-item-mini">
-                    <span>1x KONG Plush Dog Toy</span>
-                    <b>LKR 2,450</b>
-                  </div>
-                </div>
-                <div className="order-card-footer">
-                  <span>Total: <strong>LKR 10,400</strong></span>
-                  <a
-                    className="whatsapp-track-link"
-                    href="https://wa.me/94718419273?text=Hi%20City%20Pet,%20I'd%20like%20to%20track%20my%20Order%20%23CP-8921"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Track via WhatsApp →
-                  </a>
-                </div>
-              </div>
+              <p style={{ textAlign: 'center', padding: '24px 12px', color: '#64748b' }}>
+                No orders found yet.
+              </p>
             </div>
           )}
         </div>

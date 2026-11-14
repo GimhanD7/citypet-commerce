@@ -29,7 +29,7 @@ import '../admin/modals/product-media.css'
 import pdpJackRussell from '../../assets/pdp-jack-russell.jpg'
 
 export default function ProductDetail({
-  product: initialProduct = storeProducts[0],
+  product: initialProduct = null,
   authUser,
   onAddToCart,
   onBuyNow,
@@ -43,6 +43,7 @@ export default function ProductDetail({
   const product = (liveProduct?.id === initialProduct?.id && liveProduct) ? liveProduct : fallbackProduct
 
   useEffect(() => {
+    if (!initialProduct?.id) return
     let mounted = true
     setLiveProduct(null)
     setProductError('')
@@ -78,7 +79,7 @@ export default function ProductDetail({
       mounted = false
       window.removeEventListener('citypet_products_updated', handleSync)
     }
-  }, [initialProduct.id])
+  }, [initialProduct?.id])
   const [selectedSizeIndex, setSelectedSizeIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [activeTab, setActiveTab] = useState('description') // 'description' | 'ingredients' | 'feeding' | 'reviews'
@@ -88,6 +89,7 @@ export default function ProductDetail({
 
   // Reset state when product prop changes
   useEffect(() => {
+    if (!product) return
     if (product.sizes && product.sizes.length > 0) {
       const defIdx = product.sizes.findIndex((s) => s.default)
       setSelectedSizeIndex(defIdx !== -1 ? defIdx : 0)
@@ -97,7 +99,27 @@ export default function ProductDetail({
     setQuantity(1)
 
     setActiveTab('description')
-  }, [product.id, product.sizes])
+  }, [product?.id, product?.sizes])
+
+  if (!product) {
+    return (
+      <section className="section" style={{ padding: '80px 0', textAlign: 'center' }}>
+        <div className="container">
+          <h2>No product selected</h2>
+          <p style={{ margin: '12px 0 24px', color: '#5b7a76' }}>
+            Please select a product from the store catalog.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => onNavigate && onNavigate('catalog')}
+          >
+            Browse Store Catalog
+          </button>
+        </div>
+      </section>
+    )
+  }
 
   // Current price based on selected size variant
   const selectedSizeObj = product.sizes && product.sizes[selectedSizeIndex]

@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build frontend for citypet.kasunwalakumbura.com
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID || '' }}
         run: npm run build -- --base="${{ vars.VITE_BASE_PATH || '/' }}"
       - name: Check PHP syntax
         run: find api -type f -name '*.php' -print0 | xargs -0 -r -n 1 php -l
@@ -80,6 +82,7 @@ jobs:
           DB_NAME: ${{ vars.DB_NAME || secrets.DB_NAME || 'kasuormb_Citypet' }}
           DB_USER: ${{ vars.DB_USER || secrets.DB_USER || 'kasuormb_citypet' }}
           DB_PASS: ${{ secrets.DB_PASS }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID || '' }}
         run: |
           set -euo pipefail
           if [[ ! "$SFTP_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ||
@@ -94,7 +97,7 @@ jobs:
 
           if [[ -n "$DB_NAME" && -n "$DB_USER" ]]; then
             php -r '
-              $vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS"];
+              $vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "GOOGLE_CLIENT_ID"];
               $lines = ["<?php", "declare(strict_types=1);"];
               foreach ($vars as $k) {
                   $v = getenv($k);

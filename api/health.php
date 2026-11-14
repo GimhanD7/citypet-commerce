@@ -11,9 +11,10 @@ require_once __DIR__ . '/config/cors.php';
 $pdo = Database::getConnection();
 
 jsonResponse([
-    'status'    => 'ok',
-    'service'   => 'City Pet Animal Hospital REST API',
-    'database'  => $pdo ? 'connected' : 'disconnected',
-    'php'       => phpversion(),
-    'timestamp' => date('c'),
+    'status'      => 'ok',
+    'service'     => 'City Pet Animal Hospital REST API',
+    'environment' => Database::isProductionServer() ? 'production_server' : 'local_xampp',
+    'database'    => $pdo ? 'connected' : 'disconnected',
+    'php'         => phpversion(),
+    'timestamp'   => date('c'),
 ]);

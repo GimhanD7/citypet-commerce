@@ -38,7 +38,7 @@ export default function StoreCatalog({
   onNavigate,
   onSelectProduct,
 }) {
-  const [productsList, setProductsList] = useState(storeProducts)
+  const [productsList, setProductsList] = useState([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -47,8 +47,8 @@ export default function StoreCatalog({
       setLoading(true)
       try {
         const data = await productService.getProducts()
-        if (mounted && Array.isArray(data) && data.length > 0) {
-          setProductsList(data)
+        if (mounted) {
+          setProductsList(Array.isArray(data) ? data : [])
         }
       } catch (e) {
         console.warn('Error loading products from API:', e)
@@ -84,7 +84,7 @@ export default function StoreCatalog({
 
   // Filter states matching the reference design
   const [selectedPetTypes, setSelectedPetTypes] = useState(() => {
-    return initialPetType && initialPetType !== 'all' ? [initialPetType] : ['dogs']
+    return initialPetType && initialPetType !== 'all' ? [initialPetType] : []
   })
   const [selectedCategories, setSelectedCategories] = useState(() => {
     return initialCategory && initialCategory !== 'all' ? [initialCategory] : []

@@ -157,42 +157,17 @@ export default function AdminHeader({
             title="Notifications"
           >
             <Bell size={18} />
-            <span className="notif-badge-pill">3</span>
           </button>
 
           {isNotificationsOpen && (
             <div className="notifications-popup">
               <div className="notif-popup-header">
                 <strong>Notifications</strong>
-                <span className="unread-count">3 new</span>
+                <span className="unread-count">0 new</span>
               </div>
               <div className="notif-popup-list">
-                <div className="notif-item unread">
-                  <div className="notif-icon-circle alert-red">
-                    <AlertCircle size={14} />
-                  </div>
-                  <div className="notif-text">
-                    <strong>Low stock on Royal Canin 2kg</strong>
-                    <small>Only 5 bags remaining in Colombo stock</small>
-                  </div>
-                </div>
-                <div className="notif-item unread">
-                  <div className="notif-icon-circle mint">
-                    <PawPrint size={14} />
-                  </div>
-                  <div className="notif-text">
-                    <strong>Patient record updated: Buddy</strong>
-                    <small>Dr. Amanda updated wellness chart</small>
-                  </div>
-                </div>
-                <div className="notif-item unread">
-                  <div className="notif-icon-circle blue">
-                    <ShoppingBag size={14} />
-                  </div>
-                  <div className="notif-text">
-                    <strong>Order #CP75821 Paid</strong>
-                    <small>LKR 7,950 received via Online Gateway</small>
-                  </div>
+                <div className="notif-item" style={{ justifyContent: 'center', padding: '20px', color: '#7aa39e' }}>
+                  <small>No new notifications</small>
                 </div>
               </div>
             </div>

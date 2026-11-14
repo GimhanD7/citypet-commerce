@@ -11,11 +11,13 @@ import {
   DollarSign,
   ExternalLink,
   Eye,
+  EyeOff,
   FileText,
   HelpCircle,
   Home,
   Info,
   Lock,
+  Mail,
   Minus,
   Package,
   PawPrint,
@@ -33,6 +35,7 @@ import {
   Truck,
   UploadCloud,
   User,
+  UserPlus,
   X,
 } from 'lucide-react'
 import ProductVisual from '../common/ProductVisual'
@@ -53,18 +56,27 @@ export default function CheckoutPage({
   onOpenCart,
   onCheckoutLogin,
 }) {
-  // Local auth state — starts from prop, can be updated via OTP gate
+  // Local auth state — starts from prop, can be updated via Checkout Auth Gate
   const [authUser, setAuthUser] = useState(authUserProp)
-  // ── OTP Gate State ──────────────────────────────────────────────
-  // 'phone' → user enters phone | 'otp' → user enters code | 'done' → verified
-  const [otpStep, setOtpStep] = useState(() => (authUserProp ? 'done' : 'phone'))
-  const [otpPhone, setOtpPhone] = useState('')
-  const [otpCode, setOtpCode] = useState('')
-  const [otpSending, setOtpSending] = useState(false)
-  const [otpVerifying, setOtpVerifying] = useState(false)
+  // ── Checkout Auth Gate State ────────────────────────────────────
+  // 'login' → sign in | 'register' → create account | 'done' → authenticated
+  const [otpStep, setOtpStep] = useState(() => (authUserProp ? 'done' : 'login'))
+  const [gateEmail, setGateEmail] = useState('')
+  const [gatePassword, setGatePassword] = useState('')
+  const [gateShowPass, setGateShowPass] = useState(false)
+  const [gateRegName, setGateRegName] = useState('')
+  const [gateRegEmail, setGateRegEmail] = useState('')
+  const [gateRegPhone, setGateRegPhone] = useState('')
+  const [gateRegPass, setGateRegPass] = useState('')
+  const [gateRegConfirm, setGateRegConfirm] = useState('')
+  const [gateSubmitting, setGateSubmitting] = useState(false)
   const [otpError, setOtpError] = useState('')
-  const [otpDemoCode, setOtpDemoCode] = useState('')
-  const [otpResendTimer, setOtpResendTimer] = useState(0)
+  const [googleClientId, setGoogleClientId] = useState(
+    () =>
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('citypet_google_client_id')) ||
+      ''
+  )
 
   // Sync local auth when prop changes (e.g. user logs in elsewhere)
   useEffect(() => {
@@ -75,12 +87,27 @@ export default function CheckoutPage({
     }
   }, [authUserProp])
 
-  // Start resend countdown after OTP is sent
+  // Load Google Identity Services script and fetch server Google Client ID
   useEffect(() => {
-    if (otpResendTimer <= 0) return
-    const t = setTimeout(() => setOtpResendTimer((p) => p - 1), 1000)
-    return () => clearTimeout(t)
-  }, [otpResendTimer])
+    if (otpStep === 'done') return
+    authService
+      .getSession()
+      .then((res) => {
+        if (res?.googleClientId && !googleClientId) {
+          setGoogleClientId(res.googleClientId)
+        }
+      })
+      .catch(() => {})
+
+    if (typeof window !== 'undefined' && !window.google?.accounts && !document.getElementById('google-gsi-client-script')) {
+      const script = document.createElement('script')
+      script.id = 'google-gsi-client-script'
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      script.defer = true
+      document.head.appendChild(script)
+    }
+  }, [otpStep, googleClientId])
 
   // Helper to filter out system placeholder names/emails
   const isDummyName = (name) => {
@@ -423,55 +450,102 @@ export default function CheckoutPage({
     return true
   }
 
-  // ── OTP Gate Handlers ─────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    const phone = otpPhone.trim()
-    if (!phone || phone.replace(/\D/g, '').length < 9) {
-      setOtpError('Please enter a valid Sri Lankan mobile number (e.g. 077 123 4567)')
+  // ── Checkout Auth Gate Handlers (Email/Password, Register & Google) ─────
+  const completeGateAuth = (res) => {
+    const user = res?.user
+    setAuthUser(user)
+    setOtpStep('done')
+    prefillFormFromUser(user)
+    if (onCheckoutLogin && user) onCheckoutLogin(user)
+  }
+
+  const handleGateLogin = async (e) => {
+    e?.preventDefault()
+    if (!gateEmail.trim() || !gatePassword) {
+      setOtpError('Please enter your email address and password.')
       return
     }
     setOtpError('')
-    setOtpSending(true)
+    setGateSubmitting(true)
     try {
-      const res = await authService.sendOtp(phone)
-      setOtpDemoCode(res.demo_otp || '123456')
-      setOtpStep('otp')
-      setOtpResendTimer(30)
+      const res = await authService.login(gateEmail.trim(), gatePassword)
+      completeGateAuth(res)
     } catch (err) {
-      setOtpError(err.message || 'Could not send OTP. Please try again.')
+      setOtpError(err.message || 'Invalid email or password.')
     } finally {
-      setOtpSending(false)
+      setGateSubmitting(false)
     }
   }
 
-  const handleVerifyOtp = async () => {
-    const code = otpCode.trim()
-    if (!code || code.length < 4) {
-      setOtpError('Please enter the 6-digit verification code')
+  const handleGateRegister = async (e) => {
+    e?.preventDefault()
+    if (gateRegName.trim().length < 2) {
+      setOtpError('Please enter your full name.')
+      return
+    }
+    if (!gateRegEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gateRegEmail.trim())) {
+      setOtpError('Please enter a valid email address.')
+      return
+    }
+    if (gateRegPass.length < 6) {
+      setOtpError('Password must be at least 6 characters long.')
+      return
+    }
+    if (gateRegPass !== gateRegConfirm) {
+      setOtpError('Passwords do not match.')
       return
     }
     setOtpError('')
-    setOtpVerifying(true)
+    setGateSubmitting(true)
     try {
-      const res = await authService.verifyOtp(otpPhone.trim(), code)
-      const user = res?.user
-      setAuthUser(user)
-      setOtpStep('done')
-      prefillFormFromUser(user)
-      // Notify parent App so global authUser is set (stays on checkout)
-      if (onCheckoutLogin && user) onCheckoutLogin(user)
+      const res = await authService.register({
+        name: gateRegName.trim(),
+        email: gateRegEmail.trim(),
+        phone: gateRegPhone.trim(),
+        password: gateRegPass,
+      })
+      completeGateAuth(res)
     } catch (err) {
-      setOtpError(err.message || 'Invalid code. Please try again.')
+      setOtpError(err.message || 'Registration failed. Please try again.')
     } finally {
-      setOtpVerifying(false)
+      setGateSubmitting(false)
     }
   }
 
-  const handleResendOtp = async () => {
-    if (otpResendTimer > 0) return
-    setOtpCode('')
+  const handleGateGoogleLogin = () => {
     setOtpError('')
-    await handleSendOtp()
+    if (!googleClientId) {
+      setOtpError('Google Client ID is not configured yet. Please sign in or create an account with your email and password.')
+      return
+    }
+    if (!window.google?.accounts?.oauth2) {
+      setOtpError('Google Sign-In is still loading. Please try again in a moment.')
+      return
+    }
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: googleClientId,
+      scope: 'openid email profile',
+      callback: async (tokenResponse) => {
+        if (tokenResponse?.error) {
+          setOtpError('Google sign-in was cancelled or denied.')
+          return
+        }
+        if (tokenResponse?.access_token) {
+          setGateSubmitting(true)
+          try {
+            const res = await authService.googleLogin({
+              access_token: tokenResponse.access_token,
+            })
+            completeGateAuth(res)
+          } catch (err) {
+            setOtpError(err.message || 'Unable to sign in with Google.')
+          } finally {
+            setGateSubmitting(false)
+          }
+        }
+      },
+    })
+    tokenClient.requestAccessToken({ prompt: 'select_account' })
   }
 
   // Finalize order creation after payment approval or slip upload
@@ -673,7 +747,7 @@ export default function CheckoutPage({
     <div className="checkout-page-root">
 
       {/* ============================================================
-          OTP PHONE GATE — shows when user is not yet authenticated
+          ACCOUNT SIGN IN / REGISTER GATE — shows when user is not yet authenticated
          ============================================================ */}
       {otpStep !== 'done' && (
         <div className="otp-gate-overlay">
@@ -684,116 +758,209 @@ export default function CheckoutPage({
               <span className="otp-brand-name">City Pet</span>
             </div>
 
-            {otpStep === 'phone' ? (
-              /* ── Step 1: Enter Phone ── */
-              <>
-                <div className="otp-gate-icon-wrap">
-                  <Phone size={28} className="otp-gate-icon" />
-                </div>
-                <h2 className="otp-gate-title">Verify Your Phone</h2>
-                <p className="otp-gate-desc">
-                  Enter your Sri Lankan mobile number to receive a one-time verification code and securely complete your purchase.
-                </p>
+            <div className="auth-mode-tabs" role="tablist">
+              <button
+                type="button"
+                className={`auth-mode-tab-btn ${otpStep !== 'register' ? 'active' : ''}`}
+                onClick={() => { setOtpStep('login'); setOtpError('') }}
+              >
+                <Lock size={14} />
+                <span>Sign In</span>
+              </button>
+              <button
+                type="button"
+                className={`auth-mode-tab-btn ${otpStep === 'register' ? 'active' : ''}`}
+                onClick={() => { setOtpStep('register'); setOtpError('') }}
+              >
+                <UserPlus size={14} />
+                <span>Create Account</span>
+              </button>
+            </div>
 
-                <div className="otp-phone-input-wrap">
-                  <span className="otp-phone-prefix">🇱🇰 +94</span>
-                  <input
-                    id="otp-phone-field"
-                    type="tel"
-                    className={`otp-phone-input ${otpError ? 'otp-input-error' : ''}`}
-                    placeholder="77 123 4567"
-                    value={otpPhone}
-                    onChange={(e) => { setOtpPhone(e.target.value); setOtpError('') }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
-                    maxLength={12}
-                    autoFocus
-                  />
-                </div>
+            <h2 className="otp-gate-title">
+              {otpStep === 'register' ? 'Create Account to Checkout' : 'Sign In to Checkout'}
+            </h2>
+            <p className="otp-gate-desc">
+              {otpStep === 'register'
+                ? 'Create your City Pet account or connect Google to complete your order.'
+                : 'Sign in with your email and password or Google account to continue.'}
+            </p>
 
-                {otpError && <p className="otp-error-msg"><AlertCircle size={13} />{otpError}</p>}
+            {/* Google Sign-In Button */}
+            <div className="google-auth-section">
+              <button
+                type="button"
+                className="google-continue-btn"
+                onClick={handleGateGoogleLogin}
+                disabled={gateSubmitting}
+              >
+                <svg className="google-g-logo" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                </svg>
+                <span>{otpStep === 'register' ? 'Sign up with Google' : 'Continue with Google'}</span>
+              </button>
+            </div>
 
-                <button
-                  className="otp-primary-btn"
-                  onClick={handleSendOtp}
-                  disabled={otpSending}
-                >
-                  {otpSending ? (
-                    <><RefreshCw size={16} className="spin-icon" /> Sending Code…</>
-                  ) : (
-                    <><Phone size={16} /> Send Verification Code</>
-                  )}
-                </button>
+            <div className="auth-or-separator">
+              <span>or with email</span>
+            </div>
 
-                <p className="otp-gate-footnote">
-                  <Lock size={11} /> Your number is used only for order verification and will never be shared.
-                </p>
-              </>
-            ) : (
-              /* ── Step 2: Enter OTP ── */
-              <>
-                <div className="otp-gate-icon-wrap otp-icon-green">
-                  <CheckCircle2 size={28} className="otp-gate-icon" />
-                </div>
-                <h2 className="otp-gate-title">Enter Verification Code</h2>
-                <p className="otp-gate-desc">
-                  A 6-digit code was sent to <strong>{otpPhone}</strong>.
-                  <button className="otp-change-phone-btn" onClick={() => { setOtpStep('phone'); setOtpError(''); setOtpCode('') }}>
-                    Change number
-                  </button>
-                </p>
+            {otpError && <p className="otp-error-msg"><AlertCircle size={13} />{otpError}</p>}
 
-                {/* Demo OTP hint */}
-                {otpDemoCode && (
-                  <div className="otp-demo-hint">
-                    <Info size={13} />
-                    Demo mode — your code is: <strong>{otpDemoCode}</strong>
+            {otpStep !== 'register' ? (
+              <form className="admin-login-form" onSubmit={handleGateLogin} style={{ textAlign: 'left' }}>
+                <div className="admin-form-group">
+                  <label className="admin-field-label">Email Address</label>
+                  <div className="auth-input-cluster">
+                    <Mail size={16} className="auth-input-icon" />
+                    <input
+                      type="email"
+                      className="auth-text-input"
+                      placeholder="you@example.com"
+                      value={gateEmail}
+                      onChange={(e) => { setGateEmail(e.target.value); setOtpError('') }}
+                      required
+                    />
                   </div>
-                )}
-
-                <div className="otp-code-input-wrap">
-                  <input
-                    id="otp-code-field"
-                    type="text"
-                    inputMode="numeric"
-                    className={`otp-code-input ${otpError ? 'otp-input-error' : ''}`}
-                    placeholder="• • • • • •"
-                    value={otpCode}
-                    onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError('') }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyOtp()}
-                    maxLength={6}
-                    autoFocus
-                  />
                 </div>
 
-                {otpError && <p className="otp-error-msg"><AlertCircle size={13} />{otpError}</p>}
+                <div className="admin-form-group">
+                  <label className="admin-field-label">Password</label>
+                  <div className="auth-input-cluster">
+                    <Lock size={16} className="auth-input-icon" />
+                    <input
+                      type={gateShowPass ? 'text' : 'password'}
+                      className="auth-text-input"
+                      placeholder="Enter your password"
+                      value={gatePassword}
+                      onChange={(e) => { setGatePassword(e.target.value); setOtpError('') }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="auth-password-toggle"
+                      onClick={() => setGateShowPass((p) => !p)}
+                    >
+                      {gateShowPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
 
-                <button
-                  className="otp-primary-btn"
-                  onClick={handleVerifyOtp}
-                  disabled={otpVerifying || otpCode.length < 4}
-                >
-                  {otpVerifying ? (
-                    <><RefreshCw size={16} className="spin-icon" /> Verifying…</>
+                <button type="submit" className="otp-primary-btn" disabled={gateSubmitting}>
+                  {gateSubmitting ? (
+                    <><RefreshCw size={16} className="spin-icon" /> Signing In…</>
                   ) : (
-                    <><Check size={16} /> Verify & Continue to Checkout</>
+                    <><Check size={16} /> Sign In & Continue</>
                   )}
                 </button>
 
-                <button
-                  className="otp-resend-btn"
-                  onClick={handleResendOtp}
-                  disabled={otpResendTimer > 0}
-                >
-                  {otpResendTimer > 0
-                    ? `Resend code in ${otpResendTimer}s`
-                    : 'Resend Code'}
+                <div className="auth-switch-prompt">
+                  <span>Don't have an account?</span>
+                  <button type="button" className="auth-switch-link" onClick={() => { setOtpStep('register'); setOtpError('') }}>
+                    Create an account
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form className="admin-login-form" onSubmit={handleGateRegister} style={{ textAlign: 'left' }}>
+                <div className="admin-form-group">
+                  <label className="admin-field-label">Full Name</label>
+                  <div className="auth-input-cluster">
+                    <User size={16} className="auth-input-icon" />
+                    <input
+                      type="text"
+                      className="auth-text-input"
+                      placeholder="Your full name"
+                      value={gateRegName}
+                      onChange={(e) => { setGateRegName(e.target.value); setOtpError('') }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-field-label">Email Address</label>
+                  <div className="auth-input-cluster">
+                    <Mail size={16} className="auth-input-icon" />
+                    <input
+                      type="email"
+                      className="auth-text-input"
+                      placeholder="you@example.com"
+                      value={gateRegEmail}
+                      onChange={(e) => { setGateRegEmail(e.target.value); setOtpError('') }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-field-label">Phone Number</label>
+                  <div className="auth-input-cluster">
+                    <Phone size={16} className="auth-input-icon" />
+                    <input
+                      type="tel"
+                      className="auth-text-input"
+                      placeholder="+94 77 123 4567"
+                      value={gateRegPhone}
+                      onChange={(e) => { setGateRegPhone(e.target.value); setOtpError('') }}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-form-two-col">
+                  <div className="admin-form-group">
+                    <label className="admin-field-label">Password</label>
+                    <div className="auth-input-cluster">
+                      <Lock size={16} className="auth-input-icon" />
+                      <input
+                        type={gateShowPass ? 'text' : 'password'}
+                        className="auth-text-input"
+                        placeholder="Min. 6 chars"
+                        value={gateRegPass}
+                        onChange={(e) => { setGateRegPass(e.target.value); setOtpError('') }}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className="admin-field-label">Confirm</label>
+                    <div className="auth-input-cluster">
+                      <Lock size={16} className="auth-input-icon" />
+                      <input
+                        type={gateShowPass ? 'text' : 'password'}
+                        className="auth-text-input"
+                        placeholder="Repeat"
+                        value={gateRegConfirm}
+                        onChange={(e) => { setGateRegConfirm(e.target.value); setOtpError('') }}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" className="otp-primary-btn" disabled={gateSubmitting}>
+                  {gateSubmitting ? (
+                    <><RefreshCw size={16} className="spin-icon" /> Creating Account…</>
+                  ) : (
+                    <><Check size={16} /> Create Account & Continue</>
+                  )}
                 </button>
 
-                <p className="otp-gate-footnote">
-                  <Lock size={11} /> Secured by City Pet Animal Hospital
-                </p>
-              </>
+                <div className="auth-switch-prompt">
+                  <span>Already have an account?</span>
+                  <button type="button" className="auth-switch-link" onClick={() => { setOtpStep('login'); setOtpError('') }}>
+                    Sign In
+                  </button>
+                </div>
+              </form>
             )}
+
+            <p className="otp-gate-footnote">
+              <Lock size={11} /> Secured by City Pet Animal Hospital
+            </p>
           </div>
         </div>
       )}

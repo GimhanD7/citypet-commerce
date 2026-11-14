@@ -72,22 +72,23 @@ function App() {
     } catch {
       // ignore
     }
-    return storeProducts[0]
+    return storeProducts[0] || null
   })
-  const [catalogFilters, setCatalogFilters] = useState({ category: 'all', petType: 'dogs' })
+  const [catalogFilters, setCatalogFilters] = useState({ category: 'all', petType: 'all' })
   const [cartItems, setCartItems] = useState(() => {
     try {
+      localStorage.removeItem('citypet_activity_logs')
       const savedCart = localStorage.getItem('citypet_cart')
-      if (savedCart) return JSON.parse(savedCart)
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart)
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item) => item?.product?.id)
+        }
+      }
     } catch {
       // ignore
     }
-    // Initial 3 items as shown in design reference
-    return [
-      { product: storeProducts[0], quantity: 1 },
-      { product: storeProducts[1], quantity: 1 },
-      { product: storeProducts[2], quantity: 1 },
-    ]
+    return []
   })
 
   // Persist session and cart
@@ -119,11 +120,13 @@ function App() {
       try {
         const res = await apiFetch('products.php')
         const liveList = res?.products || (Array.isArray(res) ? res : [])
-        if (!mounted || !liveList.length) return
+        if (!mounted) return
 
         setCartItems((prevCart) => {
-          let modified = false
-          const refreshed = prevCart.map((item) => {
+          const liveIds = new Set(liveList.map((p) => p.id))
+          const filtered = prevCart.filter((item) => item?.product?.id && liveIds.has(item.product.id))
+          let modified = filtered.length !== prevCart.length
+          const refreshed = filtered.map((item) => {
             const live = liveList.find((p) => p.id === item.product.id)
             if (live) {
               const liveCount = live.stockCount !== undefined ? Number(live.stockCount) : (live.inStock ? 15 : 0)

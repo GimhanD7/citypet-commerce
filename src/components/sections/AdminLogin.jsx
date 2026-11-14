@@ -1,32 +1,19 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
-  Award,
-  Calendar,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Clock,
-  ExternalLink,
+  Eye,
+  EyeOff,
   Headphones,
   Heart,
-  Home,
   Lock,
-  LogOut,
-  Package,
-  PawPrint,
+  Mail,
   Phone,
-  RefreshCw,
-  Shield,
   ShieldCheck,
-  Sparkles,
-  Stethoscope,
-  Truck,
   User,
+  UserPlus,
   Users,
 } from 'lucide-react'
-import Brand from '../common/Brand'
 import checkoutHeroPets from '../../assets/checkout-hero-pets.jpg'
 import logoMark from '../../assets/citypet-logo-mark.png'
 import { authService } from '../../services/api'
@@ -34,95 +21,249 @@ import { authService } from '../../services/api'
 export default function AdminLogin({
   onNavigate,
   onLoginSuccess,
+  initialMode = 'login',
 }) {
-  const [phoneNumber, setPhoneNumber] = useState('77 123 4567')
-  const [countryCode, setCountryCode] = useState('+94')
-  const [step, setStep] = useState('phone') // 'phone' | 'otp'
-  const [otp, setOtp] = useState(['1', '2', '3', '4', '5', '6'])
+  const [mode, setMode] = useState(initialMode === 'register' ? 'register' : 'login') // 'login' | 'register'
+
+  // Login fields
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Register fields
+  const [regName, setRegName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const [regConfirmPassword, setRegConfirmPassword] = useState('')
+  const [showRegPassword, setShowRegPassword] = useState(false)
+
+  // Google Sign-In state
+  const [googleClientId, setGoogleClientId] = useState(
+    () =>
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('citypet_google_client_id')) ||
+      ''
+  )
+  const [gsiReady, setGsiReady] = useState(false)
+  const [showClientIdPrompt, setShowClientIdPrompt] = useState(false)
+  const [tempClientIdInput, setTempClientIdInput] = useState('')
+  const googleBtnContainerRef = useRef(null)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [timer, setTimer] = useState(30)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
-  // Resend countdown timer
+  // Fetch server-configured Google Client ID if not already set in env
   useEffect(() => {
-    let interval = null
-    if (step === 'otp' && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((t) => t - 1)
-      }, 1000)
+    let mounted = true
+    authService
+      .getSession()
+      .then((res) => {
+        if (!mounted) return
+        if (res?.googleClientId && !googleClientId) {
+          setGoogleClientId(res.googleClientId)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
     }
-    return () => clearInterval(interval)
-  }, [step, timer])
+  }, [googleClientId])
 
-  const handleSendOtp = async (e) => {
-    e?.preventDefault()
-    if (!phoneNumber.trim()) {
-      setErrorMessage('Please enter your registered phone number or email.')
+  // Load Google Identity Services script
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.google?.accounts) {
+      setGsiReady(true)
       return
     }
-    setErrorMessage('')
-    setIsSubmitting(true)
-
-    try {
-      const fullIdentifier = `${countryCode} ${phoneNumber}`.trim()
-      await authService.sendOtp(fullIdentifier)
-      setIsSubmitting(false)
-      setStep('otp')
-      setTimer(30)
-    } catch (err) {
-      setIsSubmitting(false)
-      setErrorMessage(err.message || 'Failed to send OTP code. Please try again.')
-    }
-  }
-
-  const handleVerifyOtp = async (e) => {
-    e?.preventDefault()
-    const enteredCode = otp.join('')
-    if (enteredCode.length < 6) {
-      setErrorMessage('Please enter the full 6-digit OTP code.')
+    const existingScript = document.getElementById('google-gsi-client-script')
+    if (existingScript) {
+      existingScript.addEventListener('load', () => setGsiReady(true))
       return
     }
-    setErrorMessage('')
-    setIsSubmitting(true)
+    const script = document.createElement('script')
+    script.id = 'google-gsi-client-script'
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => setGsiReady(true)
+    document.head.appendChild(script)
+  }, [])
 
+  // Initialize Google Identity Services ID token callback if clientId is configured
+  useEffect(() => {
+    if (!gsiReady || !googleClientId || !window.google?.accounts?.id) return
     try {
-      const fullIdentifier = `${countryCode} ${phoneNumber}`.trim()
-      const res = await authService.verifyOtp(fullIdentifier, enteredCode)
-      setIsSubmitting(false)
-
-      if (onLoginSuccess) {
-        onLoginSuccess(res.user)
-      } else {
-        onNavigate(res.role === 'admin' ? 'admin' : 'account')
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response) => {
+          if (!response?.credential) return
+          setErrorMessage('')
+          setIsSubmitting(true)
+          try {
+            const res = await authService.googleLogin({ credential: response.credential })
+            setIsSubmitting(false)
+            completeAuthentication(res)
+          } catch (err) {
+            setIsSubmitting(false)
+            setErrorMessage(err.message || 'Google sign-in failed. Please try again.')
+          }
+        },
+      })
+      if (googleBtnContainerRef.current) {
+        googleBtnContainerRef.current.innerHTML = ''
+        window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+          theme: 'outline',
+          size: 'large',
+          width: 360,
+          text: mode === 'register' ? 'signup_with' : 'continue_with',
+          shape: 'pill',
+        })
       }
     } catch (err) {
+      console.warn('Google Identity initialization warning:', err)
+    }
+  }, [gsiReady, googleClientId, mode])
+
+  const completeAuthentication = (res) => {
+    if (onLoginSuccess && res?.user) {
+      onLoginSuccess(res.user)
+    } else if (onNavigate) {
+      onNavigate(res?.role === 'admin' ? 'admin' : 'account')
+    }
+  }
+
+  const handleEmailLogin = async (e) => {
+    e?.preventDefault()
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    const cleanEmail = email.trim()
+    if (!cleanEmail) {
+      setErrorMessage('Please enter your email address.')
+      return
+    }
+    if (!password) {
+      setErrorMessage('Please enter your password.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const res = await authService.login(cleanEmail, password)
       setIsSubmitting(false)
-      setErrorMessage(err.message || 'Invalid verification code. Please try again.')
+      completeAuthentication(res)
+    } catch (err) {
+      setIsSubmitting(false)
+      setErrorMessage(err.message || 'Invalid email or password. Please try again.')
     }
   }
 
-  const handleOtpChange = (val, idx) => {
-    if (!/^\d*$/.test(val)) return
-    const newOtp = [...otp]
-    newOtp[idx] = val.slice(-1)
-    setOtp(newOtp)
+  const handleRegister = async (e) => {
+    e?.preventDefault()
+    setErrorMessage('')
+    setSuccessMessage('')
 
-    // Focus next input automatically
-    if (val && idx < 5) {
-      const nextInput = document.getElementById(`unified-otp-input-${idx + 1}`)
-      if (nextInput) nextInput.focus()
+    const cleanName = regName.trim()
+    const cleanEmail = regEmail.trim()
+    const cleanPhone = regPhone.trim()
+
+    if (cleanName.length < 2) {
+      setErrorMessage('Please enter your full name.')
+      return
+    }
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.')
+      return
+    }
+    if (regPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.')
+      return
+    }
+    if (regPassword !== regConfirmPassword) {
+      setErrorMessage('Passwords do not match. Please check and try again.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const res = await authService.register({
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        password: regPassword,
+      })
+      setIsSubmitting(false)
+      completeAuthentication(res)
+    } catch (err) {
+      setIsSubmitting(false)
+      setErrorMessage(err.message || 'Registration failed. Please try again.')
     }
   }
 
-  const handleOtpKeyDown = (e, idx) => {
-    if (e.key === 'Backspace' && !otp[idx] && idx > 0) {
-      const prevInput = document.getElementById(`unified-otp-input-${idx - 1}`)
-      if (prevInput) prevInput.focus()
+  const triggerGooglePopupWithClientId = (clientIdToUse) => {
+    if (!window.google?.accounts?.oauth2) {
+      setErrorMessage('Google Sign-In service is still loading. Please try again in a moment.')
+      return
     }
+    setErrorMessage('')
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientIdToUse,
+      scope: 'openid email profile',
+      callback: async (tokenResponse) => {
+        if (tokenResponse?.error) {
+          setErrorMessage('Google sign-in was cancelled or denied.')
+          return
+        }
+        if (tokenResponse?.access_token) {
+          setIsSubmitting(true)
+          try {
+            const res = await authService.googleLogin({
+              access_token: tokenResponse.access_token,
+            })
+            setIsSubmitting(false)
+            completeAuthentication(res)
+          } catch (err) {
+            setIsSubmitting(false)
+            setErrorMessage(err.message || 'Unable to sign in with Google.')
+          }
+        }
+      },
+    })
+    tokenClient.requestAccessToken({ prompt: 'select_account' })
   }
 
-  const handleFillDemoOtp = () => {
-    setOtp(['1', '2', '3', '4', '5', '6'])
+  const handleGoogleButtonClick = () => {
+    setErrorMessage('')
+    if (!googleClientId) {
+      setShowClientIdPrompt(true)
+      return
+    }
+    triggerGooglePopupWithClientId(googleClientId)
+  }
+
+  const handleSaveGoogleClientId = (e) => {
+    e?.preventDefault()
+    const cleaned = tempClientIdInput.trim()
+    if (!cleaned || !cleaned.includes('.apps.googleusercontent.com')) {
+      setErrorMessage('Please enter a valid Google OAuth Client ID ending in .apps.googleusercontent.com')
+      return
+    }
+    try {
+      window.localStorage?.setItem('citypet_google_client_id', cleaned)
+    } catch {}
+    setGoogleClientId(cleaned)
+    setShowClientIdPrompt(false)
+    setErrorMessage('')
+    triggerGooglePopupWithClientId(cleaned)
+  }
+
+  const switchMode = (targetMode) => {
+    setMode(targetMode)
+    setErrorMessage('')
+    setSuccessMessage('')
   }
 
   return (
@@ -233,7 +374,7 @@ export default function AdminLogin({
           </div>
 
           {/* ========================================================
-              RIGHT PANEL: Single Unified Sign In Form
+              RIGHT PANEL: Email/Password Login, Register & Google Auth
              ======================================================== */}
           <div className="admin-right-panel">
             {/* Form Brand Header */}
@@ -250,161 +391,295 @@ export default function AdminLogin({
                 </div>
               </div>
 
-              <span className="admin-portal-eyebrow">ACCOUNT LOGIN</span>
+              {/* Mode Switcher Tabs (Sign In vs Create Account) */}
+              <div className="auth-mode-tabs" role="tablist" aria-label="Account Authentication">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'login'}
+                  className={`auth-mode-tab-btn ${mode === 'login' ? 'active' : ''}`}
+                  onClick={() => switchMode('login')}
+                >
+                  <Lock size={14} />
+                  <span>Sign In</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'register'}
+                  className={`auth-mode-tab-btn ${mode === 'register' ? 'active' : ''}`}
+                  onClick={() => switchMode('register')}
+                >
+                  <UserPlus size={14} />
+                  <span>Create Account</span>
+                </button>
+              </div>
 
-              {/* Form Title & Subtitle */}
-              {step === 'otp' ? (
+              <span className="admin-portal-eyebrow">
+                {mode === 'register' ? 'NEW CUSTOMER REGISTRATION' : 'ACCOUNT SIGN IN'}
+              </span>
+
+              {mode === 'register' ? (
                 <>
-                  <h2 className="admin-portal-title">Enter Verification Code</h2>
+                  <h2 className="admin-portal-title">Create Your Account</h2>
                   <p className="admin-portal-desc">
-                    We sent a 6-digit code to <strong>{countryCode} {phoneNumber}</strong>
+                    Register with your email and password or connect your Google account to manage orders and pet care.
                   </p>
                 </>
               ) : (
                 <>
                   <h2 className="admin-portal-title">Sign In to City Pet</h2>
                   <p className="admin-portal-desc">
-                    Enter your registered phone number to receive a one-time verification code (OTP).
+                    Enter your email address and password or sign in with your Google account.
                   </p>
                 </>
               )}
             </div>
 
-            {/* Error message alert */}
+            {/* Error / Success Alerts */}
             {errorMessage && (
-              <div className="admin-error-alert">{errorMessage}</div>
+              <div className="admin-error-alert" role="alert">
+                {errorMessage}
+              </div>
+            )}
+            {successMessage && (
+              <div className="admin-success-alert" role="status">
+                {successMessage}
+              </div>
             )}
 
-            {/* ----------------------------------------------------
-                STEP 1: Phone Number Entry
-               ---------------------------------------------------- */}
-            {step === 'phone' && (
-              <form className="admin-login-form" onSubmit={handleSendOtp}>
-                <div className="admin-form-group">
-                  <label className="admin-field-label">Phone Number</label>
-                  <div className="admin-phone-input-cluster">
-                    {/* Country Code Dropdown */}
-                    <div className="country-code-selector">
-                      <span className="country-flag" role="img" aria-label="Sri Lanka Flag">
-                        🇱🇰
-                      </span>
-                      <select
-                        value={countryCode}
-                        onChange={(e) => setCountryCode(e.target.value)}
-                        className="country-code-select"
-                      >
-                        <option value="+94">+94 (LK)</option>
-                        <option value="+1">+1 (US/CA)</option>
-                        <option value="+44">+44 (UK)</option>
-                        <option value="+61">+61 (AU)</option>
-                        <option value="+65">+65 (SG)</option>
-                      </select>
-                      <ChevronDown size={14} className="dropdown-chevron" />
-                    </div>
+            {/* Google Sign-In Button */}
+            <div className="google-auth-section">
+              <button
+                type="button"
+                className="google-continue-btn"
+                onClick={handleGoogleButtonClick}
+                disabled={isSubmitting}
+              >
+                <svg className="google-g-logo" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                </svg>
+                <span>{mode === 'register' ? 'Sign up with Google' : 'Continue with Google'}</span>
+              </button>
 
-                    <div className="phone-input-divider" />
+              {/* Official Google Identity Button mount point when client ID is present */}
+              {googleClientId && (
+                <div ref={googleBtnContainerRef} className="google-gsi-rendered-wrap" />
+              )}
 
-                    {/* Phone Number Input */}
+              {/* Inline Google Client ID setup box if not yet configured */}
+              {showClientIdPrompt && !googleClientId && (
+                <div className="google-client-id-setup-box">
+                  <p className="google-setup-title">Connect Google OAuth Client ID</p>
+                  <p className="google-setup-desc">
+                    Paste your Google Cloud OAuth 2.0 Web Client ID (or set <code>GOOGLE_CLIENT_ID</code> in GitHub variables):
+                  </p>
+                  <div className="google-setup-input-row">
                     <input
-                      type="tel"
-                      className="phone-number-field"
-                      placeholder="77 123 4567"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      autoFocus
+                      type="text"
+                      className="auth-text-input"
+                      placeholder="1234567890-abc.apps.googleusercontent.com"
+                      value={tempClientIdInput}
+                      onChange={(e) => setTempClientIdInput(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="google-setup-save-btn"
+                      onClick={handleSaveGoogleClientId}
+                    >
+                      Connect
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="auth-or-separator">
+              <span>or {mode === 'register' ? 'register with email' : 'sign in with email'}</span>
+            </div>
+
+            {/* ----------------------------------------------------
+                MODE 1: EMAIL & PASSWORD SIGN IN
+               ---------------------------------------------------- */}
+            {mode === 'login' && (
+              <form className="admin-login-form" onSubmit={handleEmailLogin}>
+                <div className="admin-form-group">
+                  <label className="admin-field-label" htmlFor="login-email-input">
+                    Email Address
+                  </label>
+                  <div className="auth-input-cluster">
+                    <Mail size={16} className="auth-input-icon" />
+                    <input
+                      id="login-email-input"
+                      type="email"
+                      className="auth-text-input"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
                     />
                   </div>
+                </div>
 
-                  {/* Demo Helper Links */}
-                  <div className="phone-demo-quick-helpers">
-                    <span className="demo-helper-label">Demo logins:</span>
+                <div className="admin-form-group">
+                  <label className="admin-field-label" htmlFor="login-password-input">
+                    Password
+                  </label>
+                  <div className="auth-input-cluster">
+                    <Lock size={16} className="auth-input-icon" />
+                    <input
+                      id="login-password-input"
+                      type={showPassword ? 'text' : 'password'}
+                      className="auth-text-input"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
                     <button
                       type="button"
-                      className="demo-number-chip"
-                      onClick={() => setPhoneNumber('77 123 4567')}
+                      className="auth-password-toggle"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      User (077 123 4567)
-                    </button>
-                    <span className="chip-sep">•</span>
-                    <button
-                      type="button"
-                      className="demo-number-chip"
-                      onClick={() => setPhoneNumber('71 234 5678')}
-                    >
-                      Admin (071 234 5678)
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
 
-                {/* Primary CTA Button */}
                 <button
                   type="submit"
                   className="admin-submit-btn"
                   disabled={isSubmitting}
                 >
-                  <span>{isSubmitting ? 'Sending OTP Code...' : 'Send OTP Code'}</span>
+                  <span>{isSubmitting ? 'Signing In...' : 'Sign In'}</span>
                   <ArrowRight size={18} />
                 </button>
+
+                <div className="auth-switch-prompt">
+                  <span>Don't have an account?</span>
+                  <button
+                    type="button"
+                    className="auth-switch-link"
+                    onClick={() => switchMode('register')}
+                  >
+                    Create an account
+                  </button>
+                </div>
               </form>
             )}
 
             {/* ----------------------------------------------------
-                STEP 2: OTP Verification
+                MODE 2: CREATE NEW ACCOUNT (REGISTER)
                ---------------------------------------------------- */}
-            {step === 'otp' && (
-              <form className="admin-login-form" onSubmit={handleVerifyOtp}>
+            {mode === 'register' && (
+              <form className="admin-login-form" onSubmit={handleRegister}>
                 <div className="admin-form-group">
-                  <div className="otp-label-row">
-                    <label className="admin-field-label">One-Time Password (OTP)</label>
-                    <button
-                      type="button"
-                      className="demo-code-btn"
-                      onClick={handleFillDemoOtp}
-                    >
-                      Fill Demo (123456)
-                    </button>
+                  <label className="admin-field-label" htmlFor="reg-name-input">
+                    Full Name
+                  </label>
+                  <div className="auth-input-cluster">
+                    <User size={16} className="auth-input-icon" />
+                    <input
+                      id="reg-name-input"
+                      type="text"
+                      className="auth-text-input"
+                      placeholder="Enter your full name"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      autoComplete="name"
+                      required
+                    />
                   </div>
+                </div>
 
-                  <div className="otp-boxes-row">
-                    {otp.map((digit, idx) => (
+                <div className="admin-form-group">
+                  <label className="admin-field-label" htmlFor="reg-email-input">
+                    Email Address
+                  </label>
+                  <div className="auth-input-cluster">
+                    <Mail size={16} className="auth-input-icon" />
+                    <input
+                      id="reg-email-input"
+                      type="email"
+                      className="auth-text-input"
+                      placeholder="you@example.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-field-label" htmlFor="reg-phone-input">
+                    Mobile Phone Number <span className="optional-tag">(Optional)</span>
+                  </label>
+                  <div className="auth-input-cluster">
+                    <Phone size={16} className="auth-input-icon" />
+                    <input
+                      id="reg-phone-input"
+                      type="tel"
+                      className="auth-text-input"
+                      placeholder="+94 77 123 4567"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      autoComplete="tel"
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-form-two-col">
+                  <div className="admin-form-group">
+                    <label className="admin-field-label" htmlFor="reg-password-input">
+                      Password
+                    </label>
+                    <div className="auth-input-cluster">
+                      <Lock size={16} className="auth-input-icon" />
                       <input
-                        key={idx}
-                        id={`unified-otp-input-${idx}`}
-                        type="text"
-                        maxLength={1}
-                        className="otp-box-input"
-                        value={digit}
-                        onChange={(e) => handleOtpChange(e.target.value, idx)}
-                        onKeyDown={(e) => handleOtpKeyDown(e, idx)}
-                        autoFocus={idx === 0}
+                        id="reg-password-input"
+                        type={showRegPassword ? 'text' : 'password'}
+                        className="auth-text-input"
+                        placeholder="Min. 6 chars"
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        autoComplete="new-password"
+                        required
                       />
-                    ))}
-                  </div>
-
-                  <div className="otp-resend-row">
-                    {timer > 0 ? (
-                      <span className="resend-countdown">
-                        Resend code in <strong>{timer}s</strong>
-                      </span>
-                    ) : (
                       <button
                         type="button"
-                        className="resend-action-btn"
-                        onClick={() => {
-                          setTimer(30)
-                          setErrorMessage('')
-                        }}
+                        className="auth-password-toggle"
+                        onClick={() => setShowRegPassword((prev) => !prev)}
+                        aria-label={showRegPassword ? 'Hide password' : 'Show password'}
                       >
-                        <RefreshCw size={13} /> Resend OTP Code
+                        {showRegPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="change-phone-btn"
-                      onClick={() => setStep('phone')}
-                    >
-                      Change Number
-                    </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-field-label" htmlFor="reg-confirm-password-input">
+                      Confirm Password
+                    </label>
+                    <div className="auth-input-cluster">
+                      <Lock size={16} className="auth-input-icon" />
+                      <input
+                        id="reg-confirm-password-input"
+                        type={showRegPassword ? 'text' : 'password'}
+                        className="auth-text-input"
+                        placeholder="Repeat password"
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -413,11 +688,20 @@ export default function AdminLogin({
                   className="admin-submit-btn"
                   disabled={isSubmitting}
                 >
-                  <span>
-                    {isSubmitting ? 'Verifying Credentials...' : 'Verify & Sign In'}
-                  </span>
+                  <span>{isSubmitting ? 'Creating Account...' : 'Create Account'}</span>
                   <ArrowRight size={18} />
                 </button>
+
+                <div className="auth-switch-prompt">
+                  <span>Already have an account?</span>
+                  <button
+                    type="button"
+                    className="auth-switch-link"
+                    onClick={() => switchMode('login')}
+                  >
+                    Sign In
+                  </button>
+                </div>
               </form>
             )}
 

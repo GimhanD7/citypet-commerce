@@ -1,7 +1,8 @@
 <?php
 /**
  * City Pet Animal Hospital - Universal Authentication API
- * Handles Admin & Pet Parent logins, OTP generation, verification, and role resolution.
+ * Handles Email/Password Login, User Registration, Google OAuth 2.0 Sign-In,
+ * OTP verification, and role resolution against MySQL `users` table.
  */
 
 declare(strict_types=1);
@@ -18,6 +19,90 @@ if (!$pdo) {
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $action = $_GET['action'] ?? '';
 $data   = getRequestData();
+
+/**
+ * Fetch JSON from Google's OAuth2 verification endpoints using cURL or stream context
+ */
+function fetchGoogleJson(string $url, array $headers = []): ?array {
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => $headers,
+        ]);
+        $raw = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw !== false && $httpCode >= 200 && $httpCode < 300) {
+            $decoded = json_decode((string)$raw, true);
+            return is_array($decoded) ? $decoded : null;
+        }
+        return null;
+    }
+
+    $opts = [
+        'http' => [
+            'method'        => 'GET',
+            'timeout'       => 10,
+            'ignore_errors' => true,
+            'header'        => implode("\r\n", $headers),
+        ],
+    ];
+    $context = stream_context_create($opts);
+    $raw = @file_get_contents($url, false, $context);
+    if ($raw === false) {
+        return null;
+    }
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Verify Google ID token (`credential`) or OAuth2 `access_token`
+ */
+function verifyGoogleToken(array $payload): ?array {
+    $credential  = trim((string)($payload['credential'] ?? $payload['id_token'] ?? ''));
+    $accessToken = trim((string)($payload['access_token'] ?? $payload['accessToken'] ?? ''));
+    $expectedClientId = trim((string)(getenv('GOOGLE_CLIENT_ID') ?: ''));
+
+    if ($credential !== '') {
+        $info = fetchGoogleJson('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($credential));
+        if (!$info || empty($info['email'])) {
+            return null;
+        }
+        if ($expectedClientId !== '' && isset($info['aud']) && $info['aud'] !== $expectedClientId) {
+            return null;
+        }
+        if (isset($info['email_verified']) && $info['email_verified'] !== 'true' && $info['email_verified'] !== true) {
+            return null;
+        }
+        return [
+            'email'   => strtolower(trim((string)$info['email'])),
+            'name'    => trim((string)($info['name'] ?? explode('@', (string)$info['email'])[0])),
+            'picture' => trim((string)($info['picture'] ?? '')),
+            'sub'     => trim((string)($info['sub'] ?? '')),
+        ];
+    }
+
+    if ($accessToken !== '') {
+        $info = fetchGoogleJson('https://www.googleapis.com/oauth2/v3/userinfo', [
+            'Authorization: Bearer ' . $accessToken,
+        ]);
+        if (!$info || empty($info['email'])) {
+            return null;
+        }
+        return [
+            'email'   => strtolower(trim((string)$info['email'])),
+            'name'    => trim((string)($info['name'] ?? explode('@', (string)$info['email'])[0])),
+            'picture' => trim((string)($info['picture'] ?? '')),
+            'sub'     => trim((string)($info['sub'] ?? '')),
+        ];
+    }
+
+    return null;
+}
 
 /**
  * Smart User Lookup by Email, Phone, ID, or Normalized Digits
@@ -123,7 +208,11 @@ switch ($action) {
             $sessionUser = $stmt->fetch() ?: null;
             if ($sessionUser) $sessionUser = checkoutUserDetails($pdo, $sessionUser);
         }
-        jsonResponse(['user' => $sessionUser, 'csrfToken' => $sessionUser ? productCsrfToken() : null]);
+        jsonResponse([
+            'user'           => $sessionUser,
+            'csrfToken'      => $sessionUser ? productCsrfToken() : null,
+            'googleClientId' => getenv('GOOGLE_CLIENT_ID') ?: '',
+        ]);
         break;
     case 'logout':
         if ($method !== 'POST') jsonError('Method not allowed', 405);
@@ -131,6 +220,232 @@ switch ($action) {
         $_SESSION = [];
         session_destroy();
         jsonResponse(['loggedOut' => true]);
+        break;
+
+    /**
+     * Email & Password Login
+     * POST /api/auth.php?action=login
+     * Body: { "email": "...", "password": "..." }
+     */
+    case 'login':
+        if ($method !== 'POST') {
+            jsonError('Method not allowed', 405);
+        }
+
+        $email    = strtolower(trim((string)($data['email'] ?? '')));
+        $password = (string)($data['password'] ?? '');
+
+        if ($email === '' || $password === '') {
+            jsonError('Email address and password are required', 400);
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT `id`, `name`, `email`, `phone`, `role`, `password_hash`, `avatar`, `member_since`
+            FROM `users`
+            WHERE LOWER(`email`) = LOWER(?)
+            LIMIT 1
+        ");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            jsonError('No account found with this email address. Please create an account first.', 401);
+        }
+
+        if (empty($user['password_hash'])) {
+            jsonError('This account does not have a password set yet. Please sign in with Google or register a password for this email.', 401);
+        }
+
+        if (!password_verify($password, (string)$user['password_hash'])) {
+            jsonError('Invalid email or password. Please check your credentials and try again.', 401);
+        }
+
+        unset($user['password_hash']);
+        $user = checkoutUserDetails($pdo, $user);
+
+        $token = base64_encode(json_encode([
+            'uid'  => $user['id'],
+            'role' => $user['role'],
+            'exp'  => time() + 86400 * 7,
+        ]));
+
+        session_start();
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = $user['id'];
+
+        jsonResponse([
+            'user'  => $user,
+            'token' => $token,
+            'role'  => $user['role'],
+        ], 200, "Successfully signed in as {$user['name']}");
+        break;
+
+    /**
+     * Register New Account (Email & Password)
+     * POST /api/auth.php?action=register
+     * Body: { "name": "...", "email": "...", "phone": "...", "password": "..." }
+     */
+    case 'register':
+        if ($method !== 'POST') {
+            jsonError('Method not allowed', 405);
+        }
+
+        $name     = trim((string)($data['name'] ?? ''));
+        $email    = strtolower(trim((string)($data['email'] ?? '')));
+        $phone    = trim((string)($data['phone'] ?? ''));
+        $password = (string)($data['password'] ?? '');
+
+        if (mb_strlen($name) < 2) {
+            jsonError('Please enter your full name (at least 2 characters).', 400);
+        }
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            jsonError('Please enter a valid email address.', 400);
+        }
+        if (strlen($password) < 6) {
+            jsonError('Password must be at least 6 characters long.', 400);
+        }
+
+        $existingStmt = $pdo->prepare("
+            SELECT `id`, `name`, `email`, `phone`, `role`, `password_hash`, `avatar`, `member_since`
+            FROM `users`
+            WHERE LOWER(`email`) = LOWER(?)
+            LIMIT 1
+        ");
+        $existingStmt->execute([$email]);
+        $existingUser = $existingStmt->fetch();
+
+        $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+
+        if ($existingUser) {
+            if (!empty($existingUser['password_hash'])) {
+                jsonError('An account with this email address already exists. Please sign in instead.', 409);
+            }
+            // Existing user from Google or OTP without a password -> set their password & update details
+            $updStmt = $pdo->prepare("
+                UPDATE `users`
+                SET `name` = ?, `phone` = COALESCE(NULLIF(?, ''), `phone`), `password_hash` = ?
+                WHERE `id` = ?
+            ");
+            $updStmt->execute([$name, $phone, $passwordHash, $existingUser['id']]);
+            $user = [
+                'id'           => $existingUser['id'],
+                'name'         => $name,
+                'email'        => $existingUser['email'],
+                'phone'        => $phone !== '' ? $phone : ($existingUser['phone'] ?? ''),
+                'role'         => $existingUser['role'],
+                'avatar'       => $existingUser['avatar'] ?: '👤',
+                'member_since' => $existingUser['member_since'] ?: date('F Y'),
+            ];
+        } else {
+            $newId = 'usr-' . bin2hex(random_bytes(4));
+            $memberSince = date('F Y');
+            $insertStmt = $pdo->prepare("
+                INSERT INTO `users` (`id`, `name`, `email`, `phone`, `role`, `password_hash`, `avatar`, `member_since`)
+                VALUES (?, ?, ?, ?, 'user', ?, '👤', ?)
+            ");
+            $insertStmt->execute([$newId, $name, $email, $phone, $passwordHash, $memberSince]);
+
+            $user = [
+                'id'           => $newId,
+                'name'         => $name,
+                'email'        => $email,
+                'phone'        => $phone,
+                'role'         => 'user',
+                'avatar'       => '👤',
+                'member_since' => $memberSince,
+            ];
+        }
+
+        $user = checkoutUserDetails($pdo, $user);
+
+        $token = base64_encode(json_encode([
+            'uid'  => $user['id'],
+            'role' => $user['role'],
+            'exp'  => time() + 86400 * 7,
+        ]));
+
+        session_start();
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = $user['id'];
+
+        jsonResponse([
+            'user'  => $user,
+            'token' => $token,
+            'role'  => $user['role'],
+        ], 201, 'Account created successfully');
+        break;
+
+    /**
+     * Google OAuth 2.0 / Google Identity Services Sign-In
+     * POST /api/auth.php?action=google
+     * Body: { "credential": "<Google JWT ID token>" } OR { "access_token": "<Google OAuth2 access token>" }
+     */
+    case 'google':
+        if ($method !== 'POST') {
+            jsonError('Method not allowed', 405);
+        }
+
+        $googleProfile = verifyGoogleToken($data);
+        if (!$googleProfile || empty($googleProfile['email'])) {
+            jsonError('Unable to verify Google account credentials. Please try again.', 401);
+        }
+
+        $gEmail   = $googleProfile['email'];
+        $gName    = $googleProfile['name'] ?: explode('@', $gEmail)[0];
+        $gPicture = $googleProfile['picture'] ?: '👤';
+
+        $stmt = $pdo->prepare("
+            SELECT `id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since`
+            FROM `users`
+            WHERE LOWER(`email`) = LOWER(?)
+            LIMIT 1
+        ");
+        $stmt->execute([$gEmail]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            $updatedName   = (!empty($user['name']) && !str_starts_with($user['name'], 'usr-')) ? $user['name'] : $gName;
+            $updatedAvatar = (!empty($user['avatar']) && $user['avatar'] !== '👤') ? $user['avatar'] : $gPicture;
+            $upd = $pdo->prepare("UPDATE `users` SET `name` = ?, `avatar` = ? WHERE `id` = ?");
+            $upd->execute([$updatedName, $updatedAvatar, $user['id']]);
+            $user['name']   = $updatedName;
+            $user['avatar'] = $updatedAvatar;
+        } else {
+            $newId = 'usr-' . bin2hex(random_bytes(4));
+            $memberSince = date('F Y');
+            $ins = $pdo->prepare("
+                INSERT INTO `users` (`id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since`)
+                VALUES (?, ?, ?, '', 'user', ?, ?)
+            ");
+            $ins->execute([$newId, $gName, $gEmail, $gPicture, $memberSince]);
+            $user = [
+                'id'           => $newId,
+                'name'         => $gName,
+                'email'        => $gEmail,
+                'phone'        => '',
+                'role'         => 'user',
+                'avatar'       => $gPicture,
+                'member_since' => $memberSince,
+            ];
+        }
+
+        $user = checkoutUserDetails($pdo, $user);
+
+        $token = base64_encode(json_encode([
+            'uid'  => $user['id'],
+            'role' => $user['role'],
+            'exp'  => time() + 86400 * 7,
+        ]));
+
+        session_start();
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = $user['id'];
+
+        jsonResponse([
+            'user'  => $user,
+            'token' => $token,
+            'role'  => $user['role'],
+        ], 200, "Signed in with Google as {$user['name']}");
         break;
     /**
      * Request OTP / Initiate Login

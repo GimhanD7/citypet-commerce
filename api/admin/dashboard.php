@@ -1,6 +1,7 @@
 <?php
 /**
  * City Pet Animal Hospital - Admin Executive Dashboard Analytics API
+ * Returns 100% live database metrics with zero sample/mock fallbacks.
  */
 
 declare(strict_types=1);
@@ -13,8 +14,8 @@ if (!$pdo) {
     jsonError('Database connection unavailable', 500);
 }
 
-// 1. Calculate KPI Numbers
-$stmtRev = $pdo->query("SELECT COALESCE(SUM(`total_amount`), 0) FROM `orders`");
+// 1. Live KPI Numbers from Database
+$stmtRev = $pdo->query("SELECT COALESCE(SUM(`total_amount`), 0) FROM `orders` WHERE `status_type` != 'cancelled' AND `payment_status` != 'rejected'");
 $totalRevenue = (float)$stmtRev->fetchColumn();
 
 $stmtOrd = $pdo->query("SELECT COUNT(*) FROM `orders`");
@@ -26,51 +27,132 @@ $pendingOrders = (int)$stmtPending->fetchColumn();
 $stmtProd = $pdo->query("SELECT COUNT(*) FROM `products`");
 $totalProducts = (int)$stmtProd->fetchColumn();
 
+$stmtCust = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'user'");
+$totalCustomers = (int)$stmtCust->fetchColumn();
+
 $stmtPets = $pdo->query("SELECT COUNT(*) FROM `user_pets`");
 $totalPatients = (int)$stmtPets->fetchColumn();
 
-// 2. Recent Orders
+// 2. Live Recent Orders
 $stmtRecent = $pdo->query("
-    SELECT `id`, `order_number` as `orderNumber`, `customer_name` as `customer`, 
-           `total_amount` as `amount`, `status`, `status_type` as `statusType`,
+    SELECT `id`, `order_number` as `orderNumber`, `customer_name` as `customer`,
+           `items_count` as `itemsCount`, `total_amount` as `amount`,
+           `status`, `status_type` as `statusType`,
            DATE_FORMAT(`created_at`, '%b %d, %Y') as `date`, `item_title` as `itemTitle`
     FROM `orders`
     ORDER BY `created_at` DESC
     LIMIT 6
 ");
-$recentOrders = $stmtRecent->fetchAll();
+$recentOrders = array_map(fn($r) => [
+    'id'          => $r['orderNumber'] ?: $r['id'],
+    'orderNumber' => $r['orderNumber'] ?: $r['id'],
+    'customer'    => $r['customer'] ?: 'Customer',
+    'items'       => ((int)($r['itemsCount'] ?? 1)) . ' item' . (((int)($r['itemsCount'] ?? 1)) === 1 ? '' : 's'),
+    'total'       => 'LKR ' . number_format((float)$r['amount'], 0),
+    'amount'      => (float)$r['amount'],
+    'status'      => $r['status'] ?: 'Processing',
+    'statusType'  => $r['statusType'] === 'delivered' ? 'success' : ($r['statusType'] === 'shipped' ? 'purple' : 'info'),
+    'date'        => $r['date'],
+    'itemTitle'   => $r['itemTitle'] ?: '',
+], $stmtRecent->fetchAll());
 
-// 3. Low Stock Alerts
-$lowStockAlerts = [
-    ['product' => "Royal Canin Mini Adult 2kg", 'sku' => 'RC001', 'stock' => 5, 'minStock' => 10],
-    ['product' => "Hill's Science Diet Cat 1.5kg", 'sku' => 'HS001', 'stock' => 4, 'minStock' => 10],
-    ['product' => "KONG Dog Toy (M)", 'sku' => 'KONG003', 'stock' => 6, 'minStock' => 15],
-];
+// 3. Live Low Stock Alerts from products & product_content
+$stmtStock = $pdo->query("
+    SELECT p.`id`, p.`name`, p.`price`, p.`in_stock`,
+           COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(pc.`content_json`, '$.stockCount')) AS UNSIGNED), IF(p.`in_stock` = 1, 15, 0)) AS `stockCount`,
+           COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(pc.`content_json`, '$.reorderLevel')) AS UNSIGNED), 5) AS `reorderLevel`,
+           COALESCE(JSON_UNQUOTE(JSON_EXTRACT(pc.`content_json`, '$.mainImage')), '') AS `mainImage`
+    FROM `products` p
+    LEFT JOIN `product_content` pc ON pc.`product_id` = p.`id`
+    HAVING `stockCount` <= `reorderLevel` OR p.`in_stock` = 0
+    ORDER BY `stockCount` ASC
+    LIMIT 6
+");
+$lowStockAlerts = array_map(fn($row) => [
+    'product'  => $row['name'],
+    'sku'      => $row['id'],
+    'stock'    => (int)$row['stockCount'],
+    'minStock' => (int)$row['reorderLevel'],
+    'img'      => $row['mainImage'] ?: '',
+], $stmtStock->fetchAll());
 
-// 4. Sales Chart Timeline Data (April 1 to April 30)
-$salesChart = [
-    ['date' => 'Apr 1', 'day' => 1, 'revenue' => 130000, 'orders' => 42],
-    ['date' => 'Apr 5', 'day' => 5, 'revenue' => 205000, 'orders' => 58],
-    ['date' => 'Apr 10', 'day' => 10, 'revenue' => 260000, 'orders' => 74],
-    ['date' => 'Apr 15', 'day' => 15, 'revenue' => 320450, 'orders' => 86],
-    ['date' => 'Apr 20', 'day' => 20, 'revenue' => 195000, 'orders' => 52],
-    ['date' => 'Apr 25', 'day' => 25, 'revenue' => 245000, 'orders' => 68],
-    ['date' => 'Apr 30', 'day' => 30, 'revenue' => 335000, 'orders' => 92],
-];
+// 4. Live Top Selling Products (derived from order_items + products)
+$stmtTop = $pdo->query("
+    SELECT p.`id`, p.`name`, p.`price`,
+           COALESCE(JSON_UNQUOTE(JSON_EXTRACT(pc.`content_json`, '$.mainImage')), '') AS `mainImage`,
+           COALESCE(SUM(oi.`quantity`), 0) AS `totalSold`
+    FROM `products` p
+    LEFT JOIN `product_content` pc ON pc.`product_id` = p.`id`
+    LEFT JOIN `order_items` oi ON oi.`product_id` = p.`id`
+    GROUP BY p.`id`, p.`name`, p.`price`, `mainImage`
+    ORDER BY `totalSold` DESC, p.`created_at` DESC
+    LIMIT 5
+");
+$topProducts = [];
+$rank = 1;
+foreach ($stmtTop->fetchAll() as $tp) {
+    $topProducts[] = [
+        'rank'  => $rank++,
+        'id'    => $tp['id'],
+        'name'  => $tp['name'],
+        'sold'  => ((int)$tp['totalSold']) . ' sold',
+        'price' => 'LKR ' . number_format((float)$tp['price'], 0),
+        'img'   => $tp['mainImage'] ?: '',
+    ];
+}
+
+// 5. Live Recent Patients (from user_pets + users)
+$stmtPatients = $pdo->query("
+    SELECT p.`id`, p.`name` AS `petName`, p.`species`, p.`breed`, p.`last_visit`, p.`avatar_img`,
+           DATE_FORMAT(p.`created_at`, '%b %d, %Y') AS `date`,
+           COALESCE(u.`name`, 'Pet Owner') AS `ownerName`
+    FROM `user_pets` p
+    LEFT JOIN `users` u ON u.`id` = p.`user_id`
+    ORDER BY p.`created_at` DESC
+    LIMIT 5
+");
+$recentPatients = array_map(fn($pat) => [
+    'id'        => $pat['id'],
+    'date'      => $pat['last_visit'] ?: $pat['date'],
+    'petName'   => $pat['petName'],
+    'petType'   => $pat['breed'] ?: $pat['species'],
+    'ownerName' => $pat['ownerName'],
+    'service'   => 'Registered Pet Profile',
+    'status'    => 'Active',
+    'avatar'    => $pat['avatar_img'] ?: '',
+], $stmtPatients->fetchAll());
+
+// 6. Live Sales Chart Timeline Data (Last 7 days with orders)
+$stmtChart = $pdo->query("
+    SELECT DATE_FORMAT(`created_at`, '%b %e') AS `date`,
+           DAYOFMONTH(`created_at`) AS `day`,
+           COALESCE(SUM(`total_amount`), 0) AS `revenue`,
+           COUNT(*) AS `orders`
+    FROM `orders`
+    WHERE `status_type` != 'cancelled'
+    GROUP BY DATE(`created_at`), DATE_FORMAT(`created_at`, '%b %e'), DAYOFMONTH(`created_at`)
+    ORDER BY DATE(`created_at`) DESC
+    LIMIT 7
+");
+$salesChart = array_reverse($stmtChart->fetchAll());
 
 jsonResponse([
     'kpis' => [
-        'totalRevenue'  => $totalRevenue ?: 2840500.00,
-        'revenueGrowth' => '+14.2%',
-        'totalOrders'   => $totalOrders ?: 384,
-        'ordersGrowth'  => '+8.6%',
-        'pendingOrders' => $pendingOrders ?: 24,
-        'totalProducts' => $totalProducts ?: 138,
-        'totalPatients' => $totalPatients ?: 1240,
-        'patientGrowth' => '+18.4%',
+        'totalRevenue'   => $totalRevenue,
+        'revenueGrowth'  => '0%',
+        'totalOrders'    => $totalOrders,
+        'ordersGrowth'   => '0%',
+        'pendingOrders'  => $pendingOrders,
+        'totalProducts'  => $totalProducts,
+        'totalCustomers' => $totalCustomers,
+        'totalPatients'  => $totalPatients,
+        'lowStockCount'  => count($lowStockAlerts),
+        'patientGrowth'  => '0%',
     ],
-    'salesChart'      => $salesChart,
-    'recentOrders'    => $recentOrders,
-    'lowStockAlerts'  => $lowStockAlerts,
-    'lastUpdated'     => date('M j, Y h:i A'),
+    'salesChart'     => $salesChart,
+    'recentOrders'   => $recentOrders,
+    'topProducts'    => $topProducts,
+    'lowStockAlerts' => $lowStockAlerts,
+    'recentPatients' => $recentPatients,
+    'lastUpdated'    => date('M j, Y h:i A'),
 ]);

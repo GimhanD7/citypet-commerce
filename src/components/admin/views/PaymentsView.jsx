@@ -20,102 +20,8 @@ import {
 import { orderService } from '../../../services/api'
 import './orders_payments.css'
 
-// Initial seed transactions
-const SEED_TRANSACTIONS = [
-  {
-    id: 'txn-99412',
-    reference: 'PAY-CP-849201',
-    orderNumber: '#CP75821',
-    date: 'Apr 28, 2024, 09:30 AM',
-    customerName: 'Sarah Perera',
-    email: 'sarah.p@gmail.com',
-    paymentMethod: 'Visa / Mastercard',
-    gateway: 'Stripe Central Gateway',
-    authCode: 'AUTH_772189',
-    amount: 7950,
-    status: 'Settled',
-    statusType: 'settled',
-    type: 'Online Pharmacy Rx',
-  },
-  {
-    id: 'txn-99411',
-    reference: 'PAY-CP-774912',
-    orderNumber: '#CP75820',
-    date: 'Apr 28, 2024, 11:00 AM',
-    customerName: 'Nimesh Fernando',
-    email: 'nimesh.f@gmail.com',
-    paymentMethod: 'Hospital Counter POS',
-    gateway: 'City Pet Central Till #1',
-    authCode: 'POS_449210',
-    amount: 6800,
-    status: 'Settled',
-    statusType: 'settled',
-    type: 'Counter Pickup',
-  },
-  {
-    id: 'txn-99410',
-    reference: 'PAY-CP-661209',
-    orderNumber: '#CP75819',
-    date: 'Apr 27, 2024, 02:15 PM',
-    customerName: 'Dilini Jayasuriya',
-    email: 'dilini.j@hotmail.com',
-    paymentMethod: 'Cash on Delivery (COD)',
-    gateway: 'Islandwide Fleet Collection',
-    authCode: 'COD_PENDING',
-    amount: 4650,
-    status: 'Pending Collection',
-    statusType: 'pending',
-    type: 'Courier Dispatch',
-  },
-  {
-    id: 'txn-99409',
-    reference: 'PAY-CP-553102',
-    orderNumber: '#CP75818',
-    date: 'Apr 26, 2024, 10:00 AM',
-    customerName: 'Kasun Wijesinghe',
-    email: 'kasun.w@gmail.com',
-    paymentMethod: 'Visa / Mastercard',
-    gateway: 'Stripe Central Gateway',
-    authCode: 'AUTH_883012',
-    amount: 12450,
-    status: 'Settled',
-    statusType: 'settled',
-    type: 'Online Store Purchase',
-  },
-  {
-    id: 'txn-99408',
-    reference: 'PAY-CP-442198',
-    orderNumber: '#CP75817',
-    date: 'Apr 26, 2024, 04:20 PM',
-    customerName: 'Tharushi Kimara',
-    email: 'tharushi.k@yahoo.com',
-    paymentMethod: 'Direct Bank Transfer',
-    gateway: 'Commercial Bank of Ceylon',
-    authCode: 'BTR_293810',
-    amount: 5600,
-    status: 'Settled',
-    statusType: 'settled',
-    type: 'Online Store Purchase',
-  },
-  {
-    id: 'txn-99407',
-    reference: 'PAY-CP-331902',
-    orderNumber: '#CP75816',
-    date: 'Apr 25, 2024, 01:10 PM',
-    customerName: 'Roshan Samarasekera',
-    email: 'roshan.s@gmail.com',
-    paymentMethod: 'Visa / Mastercard',
-    gateway: 'Stripe Central Gateway',
-    authCode: 'AUTH_119023',
-    amount: 8900,
-    status: 'Refunded',
-    statusType: 'refunded',
-    type: 'Hospital Clinical Care',
-  },
-]
-
 export default function PaymentsView({ showToast }) {
-  const [transactions, setTransactions] = useState(SEED_TRANSACTIONS)
+  const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [methodFilter, setMethodFilter] = useState('all')
@@ -163,11 +69,11 @@ export default function PaymentsView({ showToast }) {
         })
         setTransactions(mapped)
       } else {
-        setTransactions(SEED_TRANSACTIONS)
+        setTransactions([])
       }
     } catch (err) {
-      console.warn('Using seed transactions:', err)
-      setTransactions(SEED_TRANSACTIONS)
+      console.warn('Error loading payment transactions:', err)
+      setTransactions([])
     } finally {
       setLoading(false)
     }
