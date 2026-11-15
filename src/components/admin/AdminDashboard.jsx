@@ -13,6 +13,7 @@ import {
 import AdminHeader from './AdminHeader'
 import AdminSidebar from './AdminSidebar'
 import AddProductModal from './modals/AddProductModal'
+import ImportProductsModal from './modals/ImportProductsModal'
 import CreateOrderModal from './modals/CreateOrderModal'
 import GenerateReportModal from './modals/GenerateReportModal'
 import ActivityLogsView from './views/ActivityLogsView'
@@ -474,6 +475,7 @@ export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
               productCategoryFilter={productCategoryFilter}
               setProductCategoryFilter={setProductCategoryFilter}
               handleOpenAddProduct={handleOpenAddProduct}
+              handleOpenImportProducts={() => setActiveModal('importProducts')}
               handleOpenEditProduct={handleOpenEditProduct}
               handleDeleteProduct={handleDeleteProduct}
               handleUpdateStockCount={handleUpdateStockCount}
@@ -523,6 +525,22 @@ export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
           setProductForm={setProductForm}
           handleSaveProduct={handleSaveProduct}
           onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {activeModal === 'importProducts' && (
+        <ImportProductsModal
+          onClose={() => setActiveModal(null)}
+          onImported={(products) => {
+            const addedIds = new Set(products.map(({ id }) => id))
+            setAdminProducts((prev) => [...products, ...prev.filter(({ id }) => !addedIds.has(id))])
+            window.dispatchEvent(new CustomEvent('citypet_products_updated'))
+            activityService.logActivity({
+              action: 'PRODUCT_ADD',
+              description: `Imported ${products.length} products from Excel.`,
+              entityType: 'product',
+            })
+          }}
         />
       )}
 

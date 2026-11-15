@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   Filter,
+  FileSpreadsheet,
   Minus,
   Package,
   PackagePlus,
@@ -309,6 +310,7 @@ export default function ProductsManagement({
   productCategoryFilter,
   setProductCategoryFilter,
   handleOpenAddProduct,
+  handleOpenImportProducts,
   handleOpenEditProduct,
   handleDeleteProduct,
   handleUpdateStockCount,
@@ -361,14 +363,16 @@ export default function ProductsManagement({
             Monitor real-time stock, adjust quantities, update pricing and manage pharmacy inventory.
           </p>
         </div>
-        <button
-          type="button"
-          className="pm-add-btn"
-          onClick={handleOpenAddProduct}
-        >
-          <PackagePlus size={16} />
-          Add New Product
-        </button>
+        <div className="pm-header-actions">
+          <button type="button" className="apm-cancel-btn" onClick={handleOpenImportProducts}>
+            <FileSpreadsheet size={16} />
+            Import Excel
+          </button>
+          <button type="button" className="pm-add-btn" onClick={handleOpenAddProduct}>
+            <PackagePlus size={16} />
+            Add New Product
+          </button>
+        </div>
       </div>
 
       {/* ── KPI Strip ───────────────────────────────────────────────── */}
