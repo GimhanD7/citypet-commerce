@@ -1,3 +1,5 @@
+import { mediaUrl } from '../../../config/media'
+import './operations.css'
 import React, { useRef, useState } from 'react'
 import {
   AlertCircle,
@@ -27,7 +29,8 @@ import royalCaninImg from '../../../assets/pdp-royal-canin-main.jpg'
  */
 function getProductImage(prod) {
   // mainImage from product_content (uploaded or URL)
-  if (prod.mainImage && prod.mainImage !== '') return prod.mainImage
+  const uploaded = mediaUrl(prod.mainImage || prod.imageType)
+  if (uploaded) return uploaded
   // imageType can be a URL if set from mainImage by formatProduct()
   if (prod.imageType && prod.imageType.startsWith('/')) return prod.imageType
   if (prod.imageType && prod.imageType.startsWith('http')) return prod.imageType
@@ -127,19 +130,23 @@ function RestockModal({ product, currentQty, onConfirm, onClose }) {
     ? (activeVariant.stockCount !== undefined ? activeVariant.stockCount : 0)
     : currentQty
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (isSubmitting) return
     const n = parseInt(addQty, 10)
     if (!n || n <= 0) return
     setIsSubmitting(true)
-    onConfirm(n, selectedVariantIdx)
+    try {
+      await onConfirm(n, selectedVariantIdx)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const presets = [5, 10, 20, 50]
 
   return (
-    <div className="pm-restock-backdrop" onClick={onClose}>
+    <div className="pm-restock-backdrop" onClick={isSubmitting ? undefined : onClose}>
       <div
         className="pm-restock-modal"
         onClick={(e) => e.stopPropagation()}
@@ -328,23 +335,22 @@ export default function ProductsManagement({
     const matchCat   = productCategoryFilter === 'all' || p.category === productCategoryFilter
     const matchStock =
       stockStatusFilter === 'all'          ? true :
-      stockStatusFilter === 'in_stock'     ? qty > 5 :
-      stockStatusFilter === 'low_stock'    ? qty > 0 && qty <= 5 :
+      stockStatusFilter === 'in_stock'     ? qty > 5 && p.inStock :
+      stockStatusFilter === 'low_stock'    ? qty > 0 && qty <= 5 && p.inStock :
       stockStatusFilter === 'out_of_stock' ? qty === 0 || !p.inStock :
       true
     return matchSearch && matchCat && matchStock
   })
 
   // ── Restock confirm handler (supports variantIndex) ──
-  const handleRestockConfirm = (addQty, variantIndex = null) => {
+  const handleRestockConfirm = async (addQty, variantIndex = null) => {
     if (!restockingProduct) return
-    const targetProduct = restockingProduct
-    setRestockingProduct(null)
-    handleUpdateStockCount(targetProduct.id, addQty, variantIndex)
+    const saved = await handleUpdateStockCount(restockingProduct.id, addQty, variantIndex)
+    if (saved) setRestockingProduct(null)
   }
 
   return (
-    <div className="pm-page">
+    <div className="pm-page admin-operations-page">
 
       {/* ── Page Header ─────────────────────────────────────────────── */}
       <div className="pm-page-header">

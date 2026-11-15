@@ -36,11 +36,15 @@ export default function ProductDetail({
   onNavigate,
   onOpenAccount,
   onSelectProduct,
+  savedItems = [],
+  onToggleWishlist,
 }) {
   const [liveProduct, setLiveProduct] = useState(null)
   const [productError, setProductError] = useState('')
   const fallbackProduct = storeProducts.find((p) => p.id === initialProduct?.id) || initialProduct
   const product = (liveProduct?.id === initialProduct?.id && liveProduct) ? liveProduct : fallbackProduct
+
+  const isCurrentSaved = (savedItems || []).some((item) => (item.id || item) === product?.id)
 
   useEffect(() => {
     if (!initialProduct?.id) return
@@ -397,6 +401,28 @@ export default function ProductDetail({
               >
                 <span>{isOut ? 'Unavailable' : 'Buy Now'}</span>
                 <ArrowRight size={18} />
+              </button>
+
+              <button
+                type="button"
+                className={`pdp-wishlist-action-btn ${isCurrentSaved ? 'liked' : ''}`}
+                onClick={() => onToggleWishlist && onToggleWishlist(product)}
+                title={isCurrentSaved ? 'Saved in Wishlist' : 'Save to Wishlist'}
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '14px',
+                  border: isCurrentSaved ? '1.5px solid #fecdd3' : '1.5px solid #d4ece7',
+                  background: isCurrentSaved ? '#fff1f2' : '#ffffff',
+                  color: isCurrentSaved ? '#e11d48' : '#648984',
+                  display: 'grid',
+                  placeItems: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s ease',
+                  flexShrink: 0,
+                }}
+              >
+                <Heart size={20} fill={isCurrentSaved ? '#e11d48' : 'none'} color={isCurrentSaved ? '#e11d48' : '#648984'} />
               </button>
             </div>
 

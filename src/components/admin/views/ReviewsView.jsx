@@ -1,3 +1,4 @@
+import './operations.css'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
@@ -24,6 +25,7 @@ import './reviews.css'
 
 export default function ReviewsView({ adminProducts = [], showToast }) {
   const [reviews, setReviews] = useState([])
+  const [loadError, setLoadError] = useState('')
   const [loading, setLoading] = useState(true)
   const [csrfToken, setCsrfToken] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -64,6 +66,7 @@ export default function ReviewsView({ adminProducts = [], showToast }) {
   // Load reviews from API or fallback
   const loadReviews = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const res = await apiFetch('reviews.php?all=1')
       setReviews(Array.isArray(res?.reviews) ? res.reviews : [])
@@ -72,6 +75,7 @@ export default function ReviewsView({ adminProducts = [], showToast }) {
       console.warn('Could not fetch all reviews from server:', err)
       setReviews([])
       setCsrfToken('')
+      setLoadError(err.message || 'Unable to load reviews.')
       if (showToast) showToast(err.message || 'Unable to load reviews.')
     } finally {
       setLoading(false)
@@ -278,7 +282,7 @@ export default function ReviewsView({ adminProducts = [], showToast }) {
   const fiveStarCount = reviews.filter((r) => r.rating === 5).length
 
   return (
-    <div className="pm-page reviews-admin-page">
+    <div className="pm-page reviews-admin-page admin-operations-page">
       {/* ── Page Header matching UsersView & ProductsManagement ── */}
       <div className="pm-page-header">
         <div>
@@ -439,6 +443,7 @@ export default function ReviewsView({ adminProducts = [], showToast }) {
       </div>
 
       {/* ── Table Card matching UsersView & ProductsManagement ─── */}
+      {loadError && <p className="operations-error" role="alert">{loadError}</p>}
       <div className="pm-table-card">
         <div className="users-table-heading reviews-table-heading">
           <div>

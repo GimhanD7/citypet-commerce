@@ -1,3 +1,7 @@
+import { mediaUrl } from '../../../config/media'
+import { createPortal } from 'react-dom'
+import { downloadCsv } from '../downloadCsv'
+import './operations.css'
 import React, { useEffect, useState } from 'react'
 import {
   Search,
@@ -22,7 +26,8 @@ import './orders_payments.css'
 
 export default function PaymentsView({ showToast }) {
   const [transactions, setTransactions] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [methodFilter, setMethodFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -32,35 +37,42 @@ export default function PaymentsView({ showToast }) {
   // Sync with live orders to build unified ledger
   const fetchTransactions = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const data = await orderService.getAllOrders()
       const list = Array.isArray(data) ? data : (data?.orders || [])
       if (list.length > 0) {
         // Build transaction ledger from live orders
-        const mapped = list.map((o, idx) => {
+        const mapped = list.map((o) => {
           const isCard = o.paymentMethod === 'card'
           const isBank = o.paymentMethod === 'bank'
           const isCod = o.paymentMethod === 'cod'
-          const isDelivered = o.status === 'Delivered'
           const paymentStatus = o.paymentStatus || 'unpaid'
           const isRejected = paymentStatus === 'rejected' || o.status === 'Payment Rejected'
+          const statusType = isRejected ? 'rejected'
+            : paymentStatus === 'refunded' ? 'refunded'
+            : paymentStatus === 'paid' ? 'settled'
+            : o.status === 'Cancelled' ? 'cancelled' : 'pending'
+          const status = { rejected: 'Rejected', refunded: 'Refunded', settled: 'Settled',
+            cancelled: 'Cancelled', pending: isBank ? 'Slip Verification' : isCod ? 'Pending Collection' : 'Pending Payment' }[statusType]
           return {
-            id: `txn-${10000 + idx}`,
+            id: o.id || o.orderNumber,
             orderId: o.id,
             reference: `PAY-${o.trackingNumber || (o.orderNumber || o.id).replace('#', '')}`,
             orderNumber: o.orderNumber || o.id,
             date: o.date || 'Recent',
             customerName: o.customerName || 'Customer',
-            email: o.email || 'customer@citypet.lk',
+            email: o.email || '—',
             paymentMethod: isCard ? 'PayHere Online Card' : isBank ? 'Direct Bank Transfer' : isCod ? 'Cash on Delivery (COD)' : 'Hospital Counter POS',
             gateway: isCard ? 'PayHere Gateway' : isBank ? 'Commercial Bank Transfer' : isCod ? 'Fleet Collection' : 'Central Pharmacy POS',
-            authCode: isCard ? (o.payherePaymentId || `PH_${Math.floor(100000 + Math.random() * 900000)}`) : isBank ? (o.paymentSlip ? 'SLIP_ATTACHED' : 'PENDING_SLIP') : 'POS_PAID',
+            authCode: o.payherePaymentId || '—',
+            method: o.paymentMethod || 'counter',
             amount: Number(o.totalPrice) || 0,
             subtotal: Number(o.subtotal) || 0,
             deliveryFee: Number(o.deliveryFee) || 0,
             discountAmount: Number(o.discountAmount) || 0,
-            status: isRejected ? 'Rejected' : (isBank && paymentStatus !== 'paid' ? 'Slip Verification' : (isCod && !isDelivered ? 'Pending Collection' : (o.status === 'Cancelled' ? 'Refunded' : 'Settled'))),
-            statusType: isRejected ? 'rejected' : (isBank && paymentStatus !== 'paid' ? 'pending' : (isCod && !isDelivered ? 'pending' : (o.status === 'Cancelled' ? 'refunded' : 'settled'))),
+            status,
+            statusType,
             type: 'Online Store Courier',
             paymentSlip: o.paymentSlip || null,
             paymentStatus,
@@ -73,7 +85,7 @@ export default function PaymentsView({ showToast }) {
       }
     } catch (err) {
       console.warn('Error loading payment transactions:', err)
-      setTransactions([])
+      setLoadError(err.message || 'Unable to load payments.')
     } finally {
       setLoading(false)
     }
@@ -96,7 +108,7 @@ export default function PaymentsView({ showToast }) {
     const matchMethod =
       methodFilter === 'all'
         ? true
-        : t.paymentMethod.toLowerCase().includes(methodFilter.toLowerCase())
+        : t.method === methodFilter
 
     const matchStatus =
       statusFilter === 'all'
@@ -107,7 +119,7 @@ export default function PaymentsView({ showToast }) {
   })
 
   // KPI calculations
-  const totalVolume = transactions.reduce((s, t) => s + (!['refunded', 'rejected'].includes(t.statusType) ? t.amount : 0), 0)
+  const totalVolume = transactions.reduce((s, t) => s + (!['refunded', 'rejected', 'cancelled'].includes(t.statusType) ? t.amount : 0), 0)
   const settledCount = transactions.filter((t) => t.statusType === 'settled').length
   const settledVolume = transactions.filter((t) => t.statusType === 'settled').reduce((s, t) => s + t.amount, 0)
   const pendingCount = transactions.filter((t) => t.statusType === 'pending').length
@@ -161,7 +173,7 @@ export default function PaymentsView({ showToast }) {
   }
 
   return (
-    <div className="payments-admin-page">
+    <div className="payments-admin-page admin-operations-page">
       {/* ── Page Header ── */}
       <div className="payments-page-header">
         <div className="payments-header-text">
@@ -184,7 +196,12 @@ export default function PaymentsView({ showToast }) {
           <button
             type="button"
             className="orders-create-btn"
-            onClick={() => showToast?.('Exporting financial payment ledger CSV...')}
+            disabled={loading || Boolean(loadError) || !filtered.length}
+            onClick={() => downloadCsv('citypet-payment-statement.csv', filtered.map((payment) => ({
+              Reference: payment.reference, Order: payment.orderNumber, Date: payment.date,
+              Customer: payment.customerName, Method: payment.paymentMethod,
+              Status: payment.status, 'Amount (LKR)': payment.amount,
+            })))}
           >
             <Download size={15} />
             <span>Export Statement</span>
@@ -268,7 +285,7 @@ export default function PaymentsView({ showToast }) {
             onChange={(e) => setMethodFilter(e.target.value)}
           >
             <option value="all">All Payment Gateways</option>
-            <option value="card">Visa / Mastercard (Stripe)</option>
+            <option value="card">PayHere Card</option>
             <option value="cod">Cash on Delivery (COD)</option>
             <option value="counter">Hospital Counter POS</option>
             <option value="bank">Bank Transfer</option>
@@ -283,7 +300,8 @@ export default function PaymentsView({ showToast }) {
             <option value="settled">Settled &amp; Paid</option>
             <option value="pending">Pending Collection</option>
             <option value="rejected">Rejected</option>
-            <option value="refunded">Refunded / Reversible</option>
+            <option value="refunded">Refunded</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
       </div>
@@ -305,14 +323,14 @@ export default function PaymentsView({ showToast }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading || loadError || filtered.length === 0 ? (
                 <tr>
                   <td colSpan="8" style={{ textAlign: 'center', padding: '48px', color: '#8daea9' }}>
                     <CreditCard size={36} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
                     <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#173d3b' }}>
-                      No matching payment records
+                      {loading ? 'Loading payments…' : loadError || 'No matching payment records'}
                     </p>
-                    <small style={{ color: '#7aa39e' }}>Try adjusting your search criteria</small>
+                    {!loading && !loadError && <small style={{ color: '#7aa39e' }}>Try adjusting your search criteria</small>}
                   </td>
                 </tr>
               ) : (
@@ -428,6 +446,20 @@ export default function PaymentsView({ showToast }) {
       </div>
 
       {/* ── Transaction Slip Modal ── */}
+      {viewingTxn?.statusType === 'settled' && createPortal(
+        <article className="payment-print-sheet" aria-hidden="true">
+          <h1>City Pet Animal Hospital</h1>
+          <h2>Payment receipt</h2>
+          <dl>
+            <div><dt>Reference</dt><dd>{viewingTxn.reference}</dd></div>
+            <div><dt>Order</dt><dd>{viewingTxn.orderNumber}</dd></div>
+            <div><dt>Customer</dt><dd>{viewingTxn.customerName}</dd></div>
+            <div><dt>Payment method</dt><dd>{viewingTxn.paymentMethod}</dd></div>
+            <div><dt>Amount paid</dt><dd>LKR {txnAmount(viewingTxn).toLocaleString()}</dd></div>
+          </dl>
+        </article>,
+        document.body,
+      )}
       {viewingTxn && (
         <div className="order-modal-backdrop" onClick={() => setViewingTxn(null)}>
           <div className="order-modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
@@ -541,7 +573,7 @@ export default function PaymentsView({ showToast }) {
                     <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#123835' }}>Customer Bank Deposit Slip</span>
                   </div>
                   <a
-                    href={viewingTxn.paymentSlip}
+                    href={mediaUrl(viewingTxn.paymentSlip)}
                     target="_blank"
                     rel="noreferrer"
                     style={{ fontSize: '12px', fontWeight: 800, color: '#04959d', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -580,13 +612,11 @@ export default function PaymentsView({ showToast }) {
                   type="button"
                   className="orders-create-btn"
                   style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={() => {
-                    showToast?.(`Downloaded receipt for ${viewingTxn.reference}`)
-                    setViewingTxn(null)
-                  }}
+                  disabled={viewingTxn.statusType !== "settled"}
+                  onClick={() => window.print()}
                 >
                   <Download size={14} />
-                  <span>Download PDF Receipt</span>
+                  <span>Print Receipt</span>
                 </button>
               </div>
             </div>

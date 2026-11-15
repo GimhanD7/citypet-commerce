@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../config/media'
 import React from 'react'
 import {
   Bone,
@@ -12,10 +13,11 @@ import {
 } from 'lucide-react'
 
 export default function ProductVisual({ type, name, category }) {
-  if (typeof type === 'string' && /^\/[A-Za-z0-9/_-]+\/uploads\/products\/[a-f0-9]{32}\.(jpg|png|webp)$/.test(type)) {
+  const src = mediaUrl(type)
+  if (src) {
     return (
       <span className="product-visual-fit">
-        <img src={type} alt={name || 'Product'} loading="lazy" />
+        <img src={src} alt={name || 'Product'} loading="lazy" />
       </span>
     )
   }

@@ -119,7 +119,7 @@ try {
         $stmtAll = $pdo->prepare("
             SELECT r.id, r.product_id, p.name AS product_name, u.name AS author, u.role AS author_role,
                    r.rating, r.title, r.comment, DATE_FORMAT(r.created_at, '%b %e, %Y') AS date,
-                   (u.role = 'admin') AS is_admin
+                   (u.role IN ('admin', 'super_admin')) AS is_admin
             FROM registered_product_reviews r
             JOIN users u ON u.id = r.user_id
             LEFT JOIN products p ON p.id = r.product_id
@@ -140,11 +140,11 @@ try {
     $stmt = $pdo->prepare("
         SELECT r.id, u.name AS author, u.role AS author_role, r.rating, r.title, r.comment,
                DATE_FORMAT(r.created_at, '%b %e, %Y') AS date,
-               (u.role = 'admin') AS is_admin
+               (u.role IN ('admin', 'super_admin')) AS is_admin
         FROM registered_product_reviews r
         JOIN users u ON u.id = r.user_id
         WHERE r.product_id = ?
-        ORDER BY (u.role = 'admin') DESC, r.created_at DESC, r.id DESC
+        ORDER BY (u.role IN ('admin', 'super_admin')) DESC, r.created_at DESC, r.id DESC
     ");
     $stmt->execute([$id]);
     $reviews = $stmt->fetchAll();
@@ -170,7 +170,7 @@ try {
         'canReview' => (bool)$uid && !$hasReviewed,
         'hasReviewed' => $hasReviewed,
         'signedIn' => (bool)$uid,
-        'isAdmin' => ($userRow['role'] ?? '') === 'admin',
+        'isAdmin' => isStaffOrAdminRole($userRow['role'] ?? ''),
         'csrfToken' => $token,
     ]);
 } catch (PDOException $e) {

@@ -9,6 +9,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/cors.php';
 require_once __DIR__ . '/config/session.php';
+require_once __DIR__ . '/config/delivery.php';
 
 $pdo = Database::getConnection();
 if (!$pdo) {
@@ -31,6 +32,16 @@ function formatOrder(array $o, PDO $pdo): array {
     $stmtTrack->execute([$orderId]);
     $trackingSteps = $stmtTrack->fetchAll();
 
+    // Fetch SMS logs count
+    $smsCount = 0;
+    try {
+        $stmtSms = $pdo->prepare("SELECT COUNT(*) FROM `sms_logs` WHERE `order_id` = ? OR `order_number` = ?");
+        $stmtSms->execute([$orderId, $o['order_number']]);
+        $smsCount = (int)$stmtSms->fetchColumn();
+    } catch (\Throwable $e) {
+        $smsCount = 0;
+    }
+
     return [
         'id'             => $o['id'],
         'orderNumber'    => $o['order_number'],
@@ -45,6 +56,7 @@ function formatOrder(array $o, PDO $pdo): array {
         'statusType'     => $o['status_type'],
         'actionLabel'    => $o['status_type'] === 'ready_pickup' ? 'Track Order' : 'View Order',
         'itemsCount'     => (int)$o['items_count'],
+        'smsCount'       => $smsCount,
         'trackingNumber' => $o['tracking_number'],
         'customerName'   => $o['customer_name'],
         'email'          => $o['email'],
@@ -75,36 +87,6 @@ function formatOrder(array $o, PDO $pdo): array {
             'done'  => (bool)$t['done']
         ], $trackingSteps),
     ];
-}
-
-function ensureDeliverySettings(PDO $pdo): void {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `delivery_settings` (
-            `id` VARCHAR(30) PRIMARY KEY,
-            `name` VARCHAR(80) NOT NULL,
-            `time_text` VARCHAR(80) NOT NULL,
-            `fee` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-            `enabled` TINYINT(1) NOT NULL DEFAULT 1,
-            `sort_order` INT NOT NULL DEFAULT 0,
-            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
-
-    $stmt = $pdo->prepare("
-        INSERT INTO `delivery_settings` (`id`, `name`, `time_text`, `fee`, `enabled`, `sort_order`)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE `id` = `id`
-    ");
-    $stmt->execute(['standard', 'Standard Delivery', '2 - 4 working days', 350, 1, 1]);
-    $stmt->execute(['express', 'Express Delivery', '1 - 2 working days', 700, 1, 2]);
-}
-
-function getDeliveryMethodConfig(PDO $pdo, string $method): ?array {
-    ensureDeliverySettings($pdo);
-    $stmt = $pdo->prepare("SELECT `id`, `fee`, `enabled` FROM `delivery_settings` WHERE `id` = ? LIMIT 1");
-    $stmt->execute([$method]);
-    $row = $stmt->fetch();
-    return $row ?: null;
 }
 
 switch ($method) {
@@ -214,7 +196,27 @@ switch ($method) {
         $phone = trim((string)($input['phone'] ?? '+94 77 123 4567'));
         $checkoutUser = currentSessionUser($pdo);
         checkProductCsrf($input);
-        $userId = $checkoutUser['id'];
+        $counterOrder = ($input['source'] ?? '') === 'counter';
+        if ($counterOrder) {
+            currentSessionUser($pdo, true);
+            $productQuery = $pdo->prepare('SELECT p.id, p.name, p.price, p.in_stock, p.image_type, c.content_json FROM products p LEFT JOIN product_content c ON c.product_id = p.id WHERE p.id = ?');
+            $counterSubtotal = 0;
+            foreach ($cartItems as &$item) {
+                $productQuery->execute([$item['product']['id'] ?? '']);
+                $product = $productQuery->fetch();
+                $quantity = filter_var($item['quantity'] ?? null, FILTER_VALIDATE_INT);
+                $content = json_decode($product['content_json'] ?? '{}', true);
+                $stock = (int)($content['stockCount'] ?? (!empty($product['in_stock']) ? 15 : 0));
+                if (!$product || $quantity < 1 || $quantity > $stock) {
+                    jsonError('Select an available product and a quantity within its stock.', 422);
+                }
+                $product['imageType'] = $product['image_type'];
+                $item = ['product' => $product, 'quantity' => $quantity];
+                $counterSubtotal += (float)$product['price'] * $quantity;
+            }
+            unset($item);
+        }
+        $userId = $counterOrder ? null : $checkoutUser['id'];
         if (strlen($customerName) < 2 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             jsonError('Please provide your name and a valid email address.', 422);
         }
@@ -225,14 +227,15 @@ switch ($method) {
         $orderId = 'ord-' . uniqid();
         $trackingNumber = 'CP-TRK-' . rand(100000, 999999);
 
-        $deliveryMethod = $input['deliveryMethod'] ?? 'standard';
-        $deliveryConfig = getDeliveryMethodConfig($pdo, $deliveryMethod);
-        if (!$deliveryConfig || !(bool)$deliveryConfig['enabled']) {
-            jsonError('Selected delivery method is currently unavailable. Please choose another delivery option.', 422);
+        $deliveryMethod = $counterOrder ? 'pickup' : ($input['deliveryMethod'] ?? 'standard');
+        if (!$counterOrder && $deliveryMethod !== 'standard') {
+            jsonError('Standard Delivery is the available delivery method.', 422);
         }
-        $paymentMethod  = $input['paymentMethod'] ?? 'card';
+        $deliveryConfig = $counterOrder ? null : standardDeliverySettings($pdo);
+        $paymentMethod = $counterOrder ? 'counter' : ($input['paymentMethod'] ?? 'card');
         $paymentSlip    = trim((string)($input['paymentSlip'] ?? '')) ?: null;
         $paymentStatus  = trim((string)($input['paymentStatus'] ?? ($paymentMethod === 'card' ? 'paid' : 'pending_slip_verification')));
+        if ($counterOrder) $paymentStatus = 'unpaid';
         $payherePaymentId = trim((string)($input['payherePaymentId'] ?? '')) ?: null;
         $address1 = $input['addressLine1'] ?? '';
         $address2 = $input['addressLine2'] ?? '';
@@ -240,145 +243,153 @@ switch ($method) {
         $district = $input['district'] ?? 'Colombo';
         $postalCode = $input['postalCode'] ?? '00700';
 
-        $subtotal = (float)($input['subtotal'] ?? 0);
-        $discountAmount = (float)($input['discountAmount'] ?? 0);
-        $deliveryFee = (float)$deliveryConfig['fee'];
+        $subtotal = $counterOrder ? $counterSubtotal : (float)($input['subtotal'] ?? 0);
+        $discountAmount = $counterOrder ? 0.0 : (float)($input['discountAmount'] ?? 0);
+        $deliveryFee = $counterOrder ? 0.0 : standardDeliveryFee($deliveryConfig, $subtotal);
         $total = max(0, $subtotal - $discountAmount + $deliveryFee);
 
         $firstItemName = $cartItems[0]['product']['name'] ?? $cartItems[0]['name'] ?? 'Pet Care Product';
         $firstItemImg = $cartItems[0]['product']['imageType'] ?? $cartItems[0]['imageType'] ?? 'royal-canin-dog';
         $itemsCount = array_reduce($cartItems, fn($acc, $item) => $acc + (int)($item['quantity'] ?? 1), 0);
 
-        // Insert Order
-        $stmtOrder = $pdo->prepare("
-            INSERT INTO `orders` (
-                `id`, `order_number`, `user_id`, `customer_name`, `email`, `phone`,
-                `delivery_method`, `payment_method`, `payment_slip`, `payment_status`, `payhere_payment_id`,
-                `address_line1`, `address_line2`,
-                `city`, `district`, `postal_code`, `subtotal`, `discount_amount`,
-                `delivery_fee`, `total_amount`, `status`, `status_type`, `tracking_number`,
-                `items_count`, `item_title`, `item_image`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+        $pdo->beginTransaction();
+        try {
+            // Insert Order
+            $stmtOrder = $pdo->prepare("
+                INSERT INTO `orders` (
+                    `id`, `order_number`, `user_id`, `customer_name`, `email`, `phone`,
+                    `delivery_method`, `payment_method`, `payment_slip`, `payment_status`, `payhere_payment_id`,
+                    `address_line1`, `address_line2`,
+                    `city`, `district`, `postal_code`, `subtotal`, `discount_amount`,
+                    `delivery_fee`, `total_amount`, `status`, `status_type`, `tracking_number`,
+                    `items_count`, `item_title`, `item_image`
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
 
-        $stmtOrder->execute([
-            $orderId, $orderNumber, $userId ?: null, $customerName, $email, $phone,
-            $deliveryMethod, $paymentMethod, $paymentSlip, $paymentStatus, $payherePaymentId,
-            $address1, $address2,
-            $city, $district, $postalCode, $subtotal, $discountAmount,
-            $deliveryFee, $total, 'Processing', 'processing', $trackingNumber,
-            $itemsCount, $firstItemName, $firstItemImg
-        ]);
+            $stmtOrder->execute([
+                $orderId, $orderNumber, $userId ?: null, $customerName, $email, $phone,
+                $deliveryMethod, $paymentMethod, $paymentSlip, $paymentStatus, $payherePaymentId,
+                $address1, $address2,
+                $city, $district, $postalCode, $subtotal, $discountAmount,
+                $deliveryFee, $total, 'Processing', 'processing', $trackingNumber,
+                $itemsCount, $firstItemName, $firstItemImg
+            ]);
 
-        // Insert Order Items
-        $stmtItem = $pdo->prepare("
-            INSERT INTO `order_items` (`order_id`, `product_id`, `name`, `size_label`, `price`, `quantity`, `line_total`, `image_type`)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+            // Insert Order Items
+            $stmtItem = $pdo->prepare("
+                INSERT INTO `order_items` (`order_id`, `product_id`, `name`, `size_label`, `price`, `quantity`, `line_total`, `image_type`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
 
-        foreach ($cartItems as $item) {
-            $prod = $item['product'] ?? $item;
-            $pId = $prod['id'] ?? 'custom-item';
-            $pName = $prod['name'] ?? 'Product';
-            $pSize = $item['selectedSize'] ?? $prod['selectedSize'] ?? '';
-            $pPrice = (float)($prod['price'] ?? 0);
-            $qty = (int)($item['quantity'] ?? 1);
-            $lineTotal = $pPrice * $qty;
-            $img = $prod['imageType'] ?? 'royal-canin-dog';
+            foreach ($cartItems as $item) {
+                $prod = $item['product'] ?? $item;
+                $pId = $prod['id'] ?? 'custom-item';
+                $pName = $prod['name'] ?? 'Product';
+                $pSize = $item['selectedSize'] ?? $prod['selectedSize'] ?? '';
+                $pPrice = (float)($prod['price'] ?? 0);
+                $qty = (int)($item['quantity'] ?? 1);
+                $lineTotal = $pPrice * $qty;
+                $img = $prod['imageType'] ?? 'royal-canin-dog';
 
-            $stmtItem->execute([$orderId, $pId, $pName, $pSize, $pPrice, $qty, $lineTotal, $img]);
-        }
+                $stmtItem->execute([$orderId, $pId, $pName, $pSize, $pPrice, $qty, $lineTotal, $img]);
+            }
 
-        // Insert Default Tracking Steps
-        $nowText = date('M j, h:i A');
-        $stmtTrack = $pdo->prepare("
-            INSERT INTO `order_tracking_steps` (`order_id`, `step_label`, `time_text`, `is_done`, `step_order`)
-            VALUES (?, ?, ?, ?, ?)
-        ");
+            // Insert Default Tracking Steps
+            $nowText = date('M j, h:i A');
+            $stmtTrack = $pdo->prepare("
+                INSERT INTO `order_tracking_steps` (`order_id`, `step_label`, `time_text`, `is_done`, `step_order`)
+                VALUES (?, ?, ?, ?, ?)
+            ");
 
-        $stmtTrack->execute([$orderId, 'Order Placed', $nowText, 1, 1]);
-        $stmtTrack->execute([$orderId, 'Veterinary Pharmacist Review', 'Pending', 0, 2]);
-        $stmtTrack->execute([$orderId, 'Packing in Progress', 'Pending', 0, 3]);
-        $stmtTrack->execute([$orderId, $deliveryMethod === 'pickup' ? 'Ready for Hospital Pickup' : 'Dispatched for Delivery', 'Pending', 0, 4]);
+            $stmtTrack->execute([$orderId, 'Order Placed', $nowText, 1, 1]);
+            $stmtTrack->execute([$orderId, 'Veterinary Pharmacist Review', 'Pending', 0, 2]);
+            $stmtTrack->execute([$orderId, 'Packing in Progress', 'Pending', 0, 3]);
+            $stmtTrack->execute([$orderId, $deliveryMethod === 'pickup' ? 'Ready for Hospital Pickup' : 'Dispatched for Delivery', 'Pending', 0, 4]);
 
-        // 5. Update user's account details (name, email, phone) & save shipping address
-        $updatedUser = null;
-        if (!empty($userId)) {
-            $checkUser = $pdo->prepare("SELECT `id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since` FROM `users` WHERE `id` = ?");
-            $checkUser->execute([$userId]);
-            $existingUser = $checkUser->fetch();
+            // 5. Update user's account details (name, email, phone) & save shipping address
+            $updatedUser = null;
+            if (!empty($userId)) {
+                $checkUser = $pdo->prepare("SELECT `id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since` FROM `users` WHERE `id` = ?");
+                $checkUser->execute([$userId]);
+                $existingUser = $checkUser->fetch();
 
-            if ($existingUser) {
-                $needsNameUpdate = empty($existingUser['name']) || $existingUser['name'] === 'Valued Client' || $existingUser['name'] === 'Valued Customer' || str_starts_with($existingUser['name'], 'usr-');
-                $needsEmailUpdate = empty($existingUser['email']) || str_ends_with($existingUser['email'], '@guest.citypet.lk');
+                if ($existingUser) {
+                    $needsNameUpdate = empty($existingUser['name']) || $existingUser['name'] === 'Valued Client' || $existingUser['name'] === 'Valued Customer' || str_starts_with($existingUser['name'], 'usr-');
+                    $needsEmailUpdate = empty($existingUser['email']) || str_ends_with($existingUser['email'], '@guest.citypet.lk');
 
-                $finalName = ($needsNameUpdate && !empty($customerName) && $customerName !== 'Valued Customer') ? $customerName : ($existingUser['name'] ?: $customerName);
-                $finalEmail = ($needsEmailUpdate && !empty($email) && !str_ends_with($email, '@guest.citypet.lk')) ? $email : $existingUser['email'];
+                    $finalName = ($needsNameUpdate && !empty($customerName) && $customerName !== 'Valued Customer') ? $customerName : ($existingUser['name'] ?: $customerName);
+                    $finalEmail = ($needsEmailUpdate && !empty($email) && !str_ends_with($email, '@guest.citypet.lk')) ? $email : $existingUser['email'];
 
-                // Check email collision before updating
-                $emailCollision = false;
-                if ($finalEmail !== $existingUser['email']) {
-                    $chkMail = $pdo->prepare("SELECT `id` FROM `users` WHERE `email` = ? AND `id` != ? LIMIT 1");
-                    $chkMail->execute([$finalEmail, $userId]);
-                    if ($chkMail->fetch()) {
-                        $emailCollision = true;
+                    // Check email collision before updating
+                    $emailCollision = false;
+                    if ($finalEmail !== $existingUser['email']) {
+                        $chkMail = $pdo->prepare("SELECT `id` FROM `users` WHERE `email` = ? AND `id` != ? LIMIT 1");
+                        $chkMail->execute([$finalEmail, $userId]);
+                        if ($chkMail->fetch()) {
+                            $emailCollision = true;
+                        }
+                    }
+
+                    if (!$emailCollision) {
+                        $upStmt = $pdo->prepare("UPDATE `users` SET `name` = ?, `email` = ?, `phone` = COALESCE(NULLIF(?, ''), `phone`) WHERE `id` = ?");
+                        $upStmt->execute([$finalName, $finalEmail, $existingUser['phone'], $userId]);
+                    } else {
+                        $upStmt = $pdo->prepare("UPDATE `users` SET `name` = ?, `phone` = COALESCE(NULLIF(?, ''), `phone`) WHERE `id` = ?");
+                        $upStmt->execute([$finalName, $existingUser['phone'], $userId]);
+                    }
+
+                    // Save or update primary address in user_addresses
+                    $addrCheck = $pdo->prepare("SELECT `id` FROM `user_addresses` WHERE `user_id` = ? LIMIT 1");
+                    $addrCheck->execute([$userId]);
+                    $hasAddress = (bool)$addrCheck->fetch();
+
+                    if (!$hasAddress || !empty($input['saveAddress'])) {
+                        $newAddrId = 'addr-' . uniqid();
+                        $stmtAddrIns = $pdo->prepare("
+                            INSERT INTO `user_addresses` (
+                                `id`, `user_id`, `title`, `recipient`, `phone`,
+                                `address_line1`, `address_line2`, `city`, `postal_code`, `is_default`
+                            ) VALUES (?, ?, 'Primary Delivery Address', ?, ?, ?, ?, ?, ?, 1)
+                        ");
+                        $stmtAddrIns->execute([
+                            $newAddrId,
+                            $userId,
+                            $customerName,
+                            $phone,
+                            $address1,
+                            $address2,
+                            $city,
+                            $postalCode
+                        ]);
+                    }
+
+                    $userFetchStmt = $pdo->prepare("SELECT `id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since` FROM `users` WHERE `id` = ?");
+                    $userFetchStmt->execute([$userId]);
+                    $freshUser = $userFetchStmt->fetch();
+                    if ($freshUser) {
+                        $updatedUser = [
+                            'id'           => $freshUser['id'],
+                            'name'         => $freshUser['name'],
+                            'email'        => $freshUser['email'],
+                            'phone'        => $freshUser['phone'],
+                            'role'         => $freshUser['role'],
+                            'avatar'       => $freshUser['avatar'],
+                            'member_since' => $freshUser['member_since'],
+                            'addressLine1' => $address1,
+                            'addressLine2' => $address2,
+                            'city'         => $city,
+                            'district'     => $district,
+                            'postalCode'   => $postalCode,
+                            'isNewCustomer'=> false,
+                        ];
                     }
                 }
-
-                if (!$emailCollision) {
-                    $upStmt = $pdo->prepare("UPDATE `users` SET `name` = ?, `email` = ?, `phone` = COALESCE(NULLIF(?, ''), `phone`) WHERE `id` = ?");
-                    $upStmt->execute([$finalName, $finalEmail, $existingUser['phone'], $userId]);
-                } else {
-                    $upStmt = $pdo->prepare("UPDATE `users` SET `name` = ?, `phone` = COALESCE(NULLIF(?, ''), `phone`) WHERE `id` = ?");
-                    $upStmt->execute([$finalName, $existingUser['phone'], $userId]);
-                }
-
-                // Save or update primary address in user_addresses
-                $addrCheck = $pdo->prepare("SELECT `id` FROM `user_addresses` WHERE `user_id` = ? LIMIT 1");
-                $addrCheck->execute([$userId]);
-                $hasAddress = (bool)$addrCheck->fetch();
-
-                if (!$hasAddress || !empty($input['saveAddress'])) {
-                    $newAddrId = 'addr-' . uniqid();
-                    $stmtAddrIns = $pdo->prepare("
-                        INSERT INTO `user_addresses` (
-                            `id`, `user_id`, `title`, `recipient`, `phone`,
-                            `address_line1`, `address_line2`, `city`, `postal_code`, `is_default`
-                        ) VALUES (?, ?, 'Primary Delivery Address', ?, ?, ?, ?, ?, ?, 1)
-                    ");
-                    $stmtAddrIns->execute([
-                        $newAddrId,
-                        $userId,
-                        $customerName,
-                        $phone,
-                        $address1,
-                        $address2,
-                        $city,
-                        $postalCode
-                    ]);
-                }
-
-                $userFetchStmt = $pdo->prepare("SELECT `id`, `name`, `email`, `phone`, `role`, `avatar`, `member_since` FROM `users` WHERE `id` = ?");
-                $userFetchStmt->execute([$userId]);
-                $freshUser = $userFetchStmt->fetch();
-                if ($freshUser) {
-                    $updatedUser = [
-                        'id'           => $freshUser['id'],
-                        'name'         => $freshUser['name'],
-                        'email'        => $freshUser['email'],
-                        'phone'        => $freshUser['phone'],
-                        'role'         => $freshUser['role'],
-                        'avatar'       => $freshUser['avatar'],
-                        'member_since' => $freshUser['member_since'],
-                        'addressLine1' => $address1,
-                        'addressLine2' => $address2,
-                        'city'         => $city,
-                        'district'     => $district,
-                        'postalCode'   => $postalCode,
-                        'isNewCustomer'=> false,
-                    ];
-                }
             }
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('Order creation failed: ' . $error->getMessage());
+            jsonError('Unable to create the order. Please try again.', 500);
         }
 
         jsonResponse([
@@ -386,6 +397,7 @@ switch ($method) {
             'orderNumber'    => $orderNumber,
             'trackingNumber' => $trackingNumber,
             'total'          => $total,
+            'deliveryFee'    => $deliveryFee,
             'recipient'      => $customerName,
             'email'          => $email,
             'phone'          => $phone,
@@ -408,9 +420,10 @@ switch ($method) {
             jsonError('Order ID is required');
         }
 
+        currentSessionUser($pdo, true);
+        checkProductCsrf($input);
+
         if ($paymentAction !== '') {
-            currentSessionUser($pdo, true);
-            checkProductCsrf($input);
 
             $paymentStatus = '';
             $status = '';
@@ -430,9 +443,11 @@ switch ($method) {
             $stmt = $pdo->prepare("
                 UPDATE `orders`
                 SET `payment_status` = ?, `status` = ?, `status_type` = ?
-                WHERE `id` = ? OR `order_number` = ?
+                WHERE (id = ? OR order_number = ?) AND payment_method = 'bank'
+                  AND payment_status IN ('unpaid', 'pending', 'pending_slip_verification') AND status_type <> 'cancelled'
             ");
             $stmt->execute([$paymentStatus, $status, $statusType, $orderId, $orderId]);
+            if ($stmt->rowCount() !== 1) jsonError('This bank payment is no longer awaiting review.', 409);
 
             jsonResponse([
                 'updated' => true,
@@ -454,12 +469,56 @@ switch ($method) {
             'Shipped'          => 'shipped',
             'Cancelled'        => 'cancelled',
         ];
-        $statusType = $statusTypeMap[$newStatus] ?? strtolower(str_replace(' ', '_', $newStatus));
+        if (!isset($statusTypeMap[$newStatus])) jsonError('Unsupported order status.', 422);
+        $statusType = $statusTypeMap[$newStatus];
+        $findOrder = $pdo->prepare('SELECT id FROM orders WHERE id = ? OR order_number = ? LIMIT 1');
+        $findOrder->execute([$orderId, $orderId]);
+        $existingOrderId = $findOrder->fetchColumn();
+        if (!$existingOrderId) jsonError('Order not found.', 404);
 
         $stmt = $pdo->prepare("UPDATE `orders` SET `status` = ?, `status_type` = ? WHERE `id` = ? OR `order_number` = ?");
         $stmt->execute([$newStatus, $statusType, $orderId, $orderId]);
 
-        jsonResponse(['updated' => true, 'orderId' => $orderId, 'status' => $newStatus], 200, 'Order status updated');
+        // Automated SMS dispatch if requested by admin
+        $smsSent = false;
+        if (!empty($input['sendSms']) && !empty($input['smsMessage'])) {
+            try {
+                $user = currentSessionUser($pdo, false);
+                $stmtOrd = $pdo->prepare("SELECT `phone`, `customer_name`, `order_number` FROM `orders` WHERE `id` = ? OR `order_number` = ? LIMIT 1");
+                $stmtOrd->execute([$orderId, $orderId]);
+                $ordRow = $stmtOrd->fetch();
+                if ($ordRow && !empty($ordRow['phone'])) {
+                    $smsId = 'sms_' . bin2hex(random_bytes(10));
+                    $stmtSmsIns = $pdo->prepare("
+                        INSERT INTO `sms_logs` (
+                            `id`, `order_id`, `order_number`, `recipient_phone`,
+                            `recipient_name`, `message`, `status`, `template_type`, `sent_by`
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmtSmsIns->execute([
+                        $smsId,
+                        $orderId,
+                        $ordRow['order_number'] ?? $orderId,
+                        $ordRow['phone'],
+                        $ordRow['customer_name'] ?? 'Customer',
+                        trim((string)$input['smsMessage']),
+                        'sent',
+                        $statusType,
+                        $user['name'] ?? 'Admin Staff'
+                    ]);
+                    $smsSent = true;
+                }
+            } catch (\Throwable $t) {
+                // Ignore auto-sms failure
+            }
+        }
+
+        jsonResponse([
+            'updated' => true,
+            'orderId' => $orderId,
+            'status' => $newStatus,
+            'smsSent' => $smsSent
+        ], 200, 'Order status updated');
         break;
 
     default:

@@ -1,3 +1,5 @@
+import { mediaUrl } from '../../../config/media'
+import './operations.css'
 import React, { useEffect, useState } from 'react'
 import {
   Search,
@@ -17,37 +19,44 @@ import {
   Building,
   Package,
   X,
-  Save,
   FileText,
+  MessageSquare,
+  Send,
+  Sparkles,
 } from 'lucide-react'
-import { orderService } from '../../../services/api'
+import { orderService, smsService } from '../../../services/api'
+import SendSmsModal from '../modals/SendSmsModal'
 import './orders_payments.css'
 
 export default function OrdersView({ onOpenCreateOrder, showToast }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [deliveryFilter, setDeliveryFilter] = useState('all')
   const [viewingOrder, setViewingOrder] = useState(null)
   const [updatingId, setUpdatingId] = useState(null)
   const [reviewingPaymentId, setReviewingPaymentId] = useState(null)
-  const [deliverySettings, setDeliverySettings] = useState([
-    { id: 'standard', name: 'Standard Delivery', time: '2 - 4 working days', fee: 350, enabled: true },
-    { id: 'express', name: 'Express Delivery', time: '1 - 2 working days', fee: 700, enabled: true },
-  ])
-  const [savingDelivery, setSavingDelivery] = useState(false)
+  // SMS Management States
+  const [activeViewMode, setActiveViewMode] = useState('orders') // 'orders' | 'sms_logs'
+  const [smsModalOrder, setSmsModalOrder] = useState(null)
+  const [viewingOrderSms, setViewingOrderSms] = useState([])
+  const [loadingViewingOrderSms, setLoadingViewingOrderSms] = useState(false)
+  const [allSmsLogs, setAllSmsLogs] = useState([])
+  const [loadingAllSms, setLoadingAllSms] = useState(false)
 
   // Fetch orders on mount
   const fetchOrders = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const data = await orderService.getAllOrders()
       const list = Array.isArray(data) ? data : (data?.orders || [])
       setOrders(list)
     } catch (err) {
       console.warn('Failed to load orders:', err)
-      setOrders([])
+      setLoadError(err.message || 'Unable to load orders.')
     } finally {
       setLoading(false)
     }
@@ -55,53 +64,62 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
 
   useEffect(() => {
     fetchOrders()
-    orderService.getDeliverySettings({ includeDisabled: true })
-      .then((methods) => {
-        if (Array.isArray(methods) && methods.length > 0) {
-          setDeliverySettings(methods.map((method) => ({
-            ...method,
-            fee: Number(method.fee ?? method.price ?? 0),
-            enabled: method.enabled !== false,
-          })))
-        }
-      })
-      .catch((err) => console.warn('Failed to load delivery settings:', err))
   }, [])
 
-  const getDeliveryLabel = (methodId) => {
-    if (methodId === 'pickup') return 'Hospital Pickup'
-    return deliverySettings.find((method) => method.id === methodId)?.name || 'Islandwide Courier'
-  }
+  // Load SMS logs for viewing order
+  useEffect(() => {
+    if (!viewingOrder?.id && !viewingOrder?.orderNumber) {
+      setViewingOrderSms([])
+      return
+    }
+    setLoadingViewingOrderSms(true)
+    smsService.getOrderSmsLogs(viewingOrder.id || viewingOrder.orderNumber)
+      .then((logs) => setViewingOrderSms(Array.isArray(logs) ? logs : []))
+      .catch((err) => console.warn('Failed to load SMS for viewing order:', err))
+      .finally(() => setLoadingViewingOrderSms(false))
+  }, [viewingOrder])
 
-  const handleDeliverySettingChange = (id, field, value) => {
-    setDeliverySettings((prev) =>
-      prev.map((method) =>
-        method.id === id
-          ? { ...method, [field]: field === 'fee' ? Number(value) : value }
-          : method
-      )
-    )
-  }
-
-  const handleSaveDeliverySettings = async () => {
-    setSavingDelivery(true)
+  // Load all SMS logs for admin SMS sent tab
+  const fetchAllSmsLogs = async () => {
+    setLoadingAllSms(true)
     try {
-      const res = await orderService.updateDeliverySettings(deliverySettings)
-      if (Array.isArray(res?.methods)) {
-        setDeliverySettings(res.methods.map((method) => ({
-          ...method,
-          fee: Number(method.fee ?? method.price ?? 0),
-          enabled: method.enabled !== false,
-        })))
-      }
-      showToast?.('Delivery options updated for checkout.')
+      const logs = await smsService.getAllSmsLogs(100)
+      setAllSmsLogs(Array.isArray(logs) ? logs : [])
     } catch (err) {
-      console.warn('Failed to save delivery settings:', err)
-      showToast?.(err.message || 'Failed to update delivery options.')
+      console.warn('Failed to load all SMS logs:', err)
+      setAllSmsLogs([])
     } finally {
-      setSavingDelivery(false)
+      setLoadingAllSms(false)
     }
   }
+
+  useEffect(() => {
+    if (activeViewMode === 'sms_logs') {
+      fetchAllSmsLogs()
+    }
+  }, [activeViewMode])
+
+  const handleSmsSent = (orderId) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId || o.orderNumber === orderId
+          ? { ...o, smsCount: (o.smsCount || 0) + 1 }
+          : o
+      )
+    )
+    if (viewingOrder && (viewingOrder.id === orderId || viewingOrder.orderNumber === orderId)) {
+      smsService.getOrderSmsLogs(orderId).then((logs) => {
+        setViewingOrderSms(Array.isArray(logs) ? logs : [])
+      })
+    }
+    if (activeViewMode === 'sms_logs') {
+      fetchAllSmsLogs()
+    }
+  }
+
+  const getDeliveryLabel = (methodId) => ({
+    pickup: 'Hospital Pickup', standard: 'Standard Delivery', express: 'Express Delivery',
+  })[methodId] || 'Islandwide Courier'
 
   const handleReviewBankTransfer = async (order, paymentAction) => {
     const orderId = order.id || order.orderNumber
@@ -118,7 +136,7 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
           item.id === orderId || item.orderNumber === orderId ? { ...item, ...patch } : item
         )
       )
-      setViewingOrder((prev) => prev ? { ...prev, ...patch } : prev)
+      setViewingOrder((prev) => prev && (prev.id === orderId || prev.orderNumber === orderId) ? { ...prev, ...patch } : prev)
       showToast?.(paymentAction === 'verify' ? `Bank payment verified for ${order.orderNumber}.` : `Bank payment rejected for ${order.orderNumber}.`)
     } catch (err) {
       showToast?.(err.message || 'Payment review failed.')
@@ -188,7 +206,7 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalPrice) || 0), 0)
 
   return (
-    <div className="orders-admin-page">
+    <div className="orders-admin-page admin-operations-page">
       {/* ── Page Header ── */}
       <div className="orders-page-header">
         <div className="orders-header-text">
@@ -199,13 +217,59 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
           </p>
         </div>
         <div className="orders-header-actions">
+          {/* View Mode Switcher */}
+          <div style={{ display: 'inline-flex', background: '#eef6f4', borderRadius: '12px', padding: '3px', border: '1px solid #d4e8e3' }}>
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('orders')}
+              style={{
+                border: 'none',
+                borderRadius: '9px',
+                padding: '7px 15px',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: activeViewMode === 'orders' ? '#ffffff' : 'transparent',
+                color: activeViewMode === 'orders' ? '#04959d' : '#557e79',
+                boxShadow: activeViewMode === 'orders' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <ShoppingBag size={14} /> Orders ({totalOrders})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('sms_logs')}
+              style={{
+                border: 'none',
+                borderRadius: '9px',
+                padding: '7px 15px',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: activeViewMode === 'sms_logs' ? '#ffffff' : 'transparent',
+                color: activeViewMode === 'sms_logs' ? '#04959d' : '#557e79',
+                boxShadow: activeViewMode === 'sms_logs' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <MessageSquare size={14} /> SMS Sent Logs
+            </button>
+          </div>
+
           <button
             type="button"
             className="orders-refresh-btn"
-            onClick={fetchOrders}
-            title="Refresh orders from central database"
+            onClick={activeViewMode === 'orders' ? fetchOrders : fetchAllSmsLogs}
+            title="Refresh from central database"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={(loading || loadingAllSms) ? 'animate-spin' : ''} />
             <span>Sync Live</span>
           </button>
           <button
@@ -266,68 +330,6 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
         </div>
       </div>
 
-      <div className="orders-table-card" style={{ padding: '18px', marginBottom: '18px' }}>
-        <div className="orders-page-header" style={{ marginBottom: '14px' }}>
-          <div className="orders-header-text">
-            <span className="orders-eyebrow">Checkout Delivery</span>
-            <h3 className="orders-page-title" style={{ fontSize: '20px' }}>Delivery Options</h3>
-            <p className="orders-page-desc">
-              Enable or disable customer delivery choices and update the checkout fee.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="orders-create-btn"
-            onClick={handleSaveDeliverySettings}
-            disabled={savingDelivery}
-          >
-            <Save size={15} />
-            <span>{savingDelivery ? 'Saving...' : 'Save Delivery'}</span>
-          </button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(240px, 1fr))', gap: '12px' }}>
-          {deliverySettings.map((method) => (
-            <div
-              key={method.id}
-              style={{
-                border: '1px solid rgba(23, 61, 59, 0.12)',
-                borderRadius: '12px',
-                padding: '14px',
-                background: method.enabled ? '#f7fcfb' : '#f8faf9',
-              }}
-            >
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
-                <span style={{ fontWeight: 900, color: '#173d3b' }}>{method.name}</span>
-                <input
-                  type="checkbox"
-                  checked={method.enabled}
-                  onChange={(e) => handleDeliverySettingChange(method.id, 'enabled', e.target.checked)}
-                  style={{ width: 18, height: 18, accentColor: '#04959d' }}
-                />
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '10px' }}>
-                <input
-                  className="orders-select-filter"
-                  type="text"
-                  value={method.time || ''}
-                  onChange={(e) => handleDeliverySettingChange(method.id, 'time', e.target.value)}
-                  placeholder="Delivery time"
-                />
-                <input
-                  className="orders-select-filter"
-                  type="number"
-                  min="0"
-                  value={method.fee}
-                  onChange={(e) => handleDeliverySettingChange(method.id, 'fee', e.target.value)}
-                  placeholder="Fee"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* ── Filter Toolbar ── */}
       <div className="orders-toolbar">
         <div className="orders-search-box">
@@ -371,126 +373,289 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
           >
             <option value="all">All Delivery Modes</option>
             <option value="standard">Standard Delivery</option>
-            <option value="express">Express Delivery</option>
+            <option value="express">Express Delivery (past orders)</option>
             <option value="pickup">Hospital Counter Pickup</option>
           </select>
         </div>
       </div>
 
-      {/* ── Table ── */}
-      <div className="orders-table-card">
-        <div className="orders-table-wrap">
-          <table className="orders-table">
-            <thead>
-              <tr>
-                <th className="orders-th">Order # &amp; Date</th>
-                <th className="orders-th">Customer</th>
-                <th className="orders-th">Order Summary</th>
-                <th className="orders-th">Delivery &amp; Method</th>
-                <th className="orders-th">Total (LKR)</th>
-                <th className="orders-th">Status</th>
-                <th className="orders-th" style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.length === 0 ? (
+      {/* ── Orders Table or SMS Sent Logs Table ── */}
+      {activeViewMode === 'orders' ? (
+        <div className="orders-table-card">
+          <div className="orders-table-wrap">
+            <table className="orders-table">
+              <thead>
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '48px', color: '#8daea9' }}>
-                    <Package size={36} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#173d3b' }}>
-                      No matching orders found
-                    </p>
-                    <small style={{ color: '#7aa39e' }}>Try adjusting your search terms or filter selection</small>
-                  </td>
+                  <th className="orders-th">Order # &amp; Date</th>
+                  <th className="orders-th">Customer</th>
+                  <th className="orders-th">Order Summary</th>
+                  <th className="orders-th">Delivery &amp; Method</th>
+                  <th className="orders-th">Total (LKR)</th>
+                  <th className="orders-th">Status</th>
+                  <th className="orders-th" style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ) : (
-                filteredOrders.map((o) => {
-                  const sType = o.statusType || 'processing'
-                  return (
-                    <tr key={o.id || o.orderNumber} className="orders-row">
-                      {/* Order # */}
-                      <td className="orders-td">
-                        <div className="order-num-block">
-                          <span className="order-num-bold">{o.orderNumber || o.id}</span>
-                          <span className="order-date-sub">{o.date}</span>
-                        </div>
-                      </td>
+              </thead>
+              <tbody>
+                {loading || loadError || filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '48px', color: '#8daea9' }}>
+                      <Package size={36} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#173d3b' }}>
+                        {loading ? 'Loading orders…' : loadError || 'No matching orders found'}
+                      </p>
+                      <small style={{ color: '#7aa39e' }}>Try adjusting your search terms or filter selection</small>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.map((o) => {
+                    const sType = o.statusType || 'processing'
+                    return (
+                      <tr key={o.id || o.orderNumber} className="orders-row">
+                        {/* Order # */}
+                        <td className="orders-td">
+                          <div className="order-num-block">
+                            <span className="order-num-bold">{o.orderNumber || o.id}</span>
+                            <span className="order-date-sub">{o.date}</span>
+                          </div>
+                        </td>
 
-                      {/* Customer */}
+                        {/* Customer */}
+                        <td className="orders-td">
+                          <div className="order-customer-cell">
+                            <span className="order-customer-name">{o.customerName || 'Customer'}</span>
+                            <span className="order-customer-contact">
+                              {o.phone || o.email || 'Verified Buyer'}
+                            </span>
+                            {o.smsCount > 0 && (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  color: '#04959d',
+                                  background: '#eef9f8',
+                                  padding: '2px 7px',
+                                  borderRadius: '10px',
+                                  width: 'fit-content',
+                                  marginTop: '3px',
+                                }}
+                                title={`${o.smsCount} SMS notification(s) sent`}
+                              >
+                                <MessageSquare size={11} /> {o.smsCount} SMS sent
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Items */}
+                        <td className="orders-td">
+                          <div className="order-items-preview">
+                            <span className="order-items-title">{o.itemTitle || 'Pet Care Essentials'}</span>
+                            <span className="order-items-badge">
+                              {o.itemsCount || (o.itemsList ? o.itemsList.length : 1)} item{o.itemsCount !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Delivery & Payment */}
+                        <td className="orders-td">
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <span className={`order-method-badge ${o.paymentMethod === 'card' ? 'card' : o.paymentMethod === 'cod' ? 'cod' : ''}`}>
+                              {o.deliveryMethod === 'pickup' ? 'Hospital Pickup' : getDeliveryLabel(o.deliveryMethod)}
+                            </span>
+                            <small style={{ fontSize: '11px', color: '#8daea9' }}>
+                              {o.address?.city || 'Colombo'} &bull; {o.paymentMethod?.toUpperCase() || 'CARD'}
+                            </small>
+                          </div>
+                        </td>
+
+                        {/* Total */}
+                        <td className="orders-td">
+                          <span className="order-total-bold">
+                            LKR {Number(o.totalPrice || 0).toLocaleString()}
+                          </span>
+                        </td>
+
+                        {/* Status Selector */}
+                        <td className="orders-td">
+                          <select
+                            className={`order-status-pill status-${sType}`}
+                            value={o.status}
+                            disabled={updatingId === o.id}
+                            onChange={(e) => handleStatusChange(o.id || o.orderNumber, e.target.value)}
+                          >
+                            <option value="Processing">⏳ Processing</option>
+                            <option value="Ready for Pickup">🏥 Ready for Pickup</option>
+                            <option value="Shipped">🚚 Shipped</option>
+                            <option value="Delivered">✅ Delivered</option>
+                            <option value="Cancelled">❌ Cancelled</option>
+                          </select>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="orders-td" style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="order-action-btn"
+                              title="Send SMS update to customer"
+                              style={{ color: '#04959d', borderColor: '#bce1db' }}
+                              onClick={() => setSmsModalOrder(o)}
+                            >
+                              <MessageSquare size={13} />
+                              SMS
+                            </button>
+                            <button
+                              type="button"
+                              className="order-action-btn"
+                              title="View order tracking & receipt"
+                              onClick={() => setViewingOrder(o)}
+                            >
+                              <Eye size={13} />
+                              Details
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* SMS Dispatch Audit Logs Table */
+        <div className="orders-table-card">
+          <div className="orders-page-header" style={{ padding: '18px 22px', borderBottom: '1px solid #ebf4f1', margin: 0, flexWrap: 'nowrap' }}>
+            <div className="orders-header-text">
+              <span className="orders-eyebrow">Customer Communication Logs</span>
+              <h3 className="orders-page-title" style={{ fontSize: '20px' }}>SMS Dispatch History</h3>
+              <p className="orders-page-desc">
+                Live audit trail of all automated &amp; manual SMS alerts sent to customers.
+              </p>
+            </div>
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 800,
+                color: '#04959d',
+                background: '#eef9f8',
+                border: '1px solid #d4e8e3',
+                padding: '6px 16px',
+                borderRadius: '20px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Total Sent: {allSmsLogs.length}
+            </span>
+          </div>
+
+          <div className="orders-table-wrap">
+            <table className="orders-table">
+              <thead>
+                <tr>
+                  <th className="orders-th">Time &amp; Date</th>
+                  <th className="orders-th">Order #</th>
+                  <th className="orders-th">Recipient</th>
+                  <th className="orders-th">Message Body</th>
+                  <th className="orders-th">Category</th>
+                  <th className="orders-th">Sent By</th>
+                  <th className="orders-th" style={{ textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingAllSms ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#7a9f9b' }}>
+                      <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 10px' }} />
+                      <p style={{ margin: 0, fontWeight: 700 }}>Loading SMS logs from database...</p>
+                    </td>
+                  </tr>
+                ) : allSmsLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '48px', color: '#8daea9' }}>
+                      <MessageSquare size={36} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#173d3b' }}>
+                        No SMS notifications dispatched yet
+                      </p>
+                      <small style={{ color: '#7aa39e' }}>
+                        Click the "SMS" button on any order to send real-time tracking and delivery notices.
+                      </small>
+                    </td>
+                  </tr>
+                ) : (
+                  allSmsLogs.map((sms) => (
+                    <tr key={sms.id} className="orders-row">
+                      <td className="orders-td" style={{ fontSize: '12px', color: '#688d88', whiteSpace: 'nowrap' }}>
+                        {sms.created_at}
+                      </td>
                       <td className="orders-td">
-                        <div className="order-customer-cell">
-                          <span className="order-customer-name">{o.customerName || 'Customer'}</span>
-                          <span className="order-customer-contact">
-                            {o.phone || o.email || 'Verified Buyer'}
+                        <strong style={{ color: '#123835', fontSize: '13px' }}>
+                          {sms.order_number || sms.order_id || 'Direct'}
+                        </strong>
+                      </td>
+                      <td className="orders-td">
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 800, color: '#173d3b', fontSize: '13px' }}>
+                            {sms.recipient_name || 'Customer'}
+                          </span>
+                          <span style={{ fontSize: '11.5px', color: '#04959d', fontWeight: 600 }}>
+                            {sms.recipient_phone}
                           </span>
                         </div>
                       </td>
-
-                      {/* Items */}
-                      <td className="orders-td">
-                        <div className="order-items-preview">
-                          <span className="order-items-title">{o.itemTitle || 'Pet Care Essentials'}</span>
-                          <span className="order-items-badge">
-                            {o.itemsCount || (o.itemsList ? o.itemsList.length : 1)} item{o.itemsCount !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Delivery & Payment */}
-                      <td className="orders-td">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          <span className={`order-method-badge ${o.paymentMethod === 'card' ? 'card' : o.paymentMethod === 'cod' ? 'cod' : ''}`}>
-                            {o.deliveryMethod === 'pickup' ? 'Hospital Pickup' : getDeliveryLabel(o.deliveryMethod)}
-                          </span>
-                          <small style={{ fontSize: '11px', color: '#8daea9' }}>
-                            {o.address?.city || 'Colombo'} &bull; {o.paymentMethod?.toUpperCase() || 'CARD'}
-                          </small>
-                        </div>
-                      </td>
-
-                      {/* Total */}
-                      <td className="orders-td">
-                        <span className="order-total-bold">
-                          LKR {Number(o.totalPrice || 0).toLocaleString()}
+                      <td className="orders-td" style={{ maxWidth: '340px' }}>
+                        <span style={{ fontSize: '12.5px', color: '#2b524e', lineHeight: '1.45', display: 'block' }}>
+                          {sms.message}
                         </span>
                       </td>
-
-                      {/* Status Selector */}
                       <td className="orders-td">
-                        <select
-                          className={`order-status-pill status-${sType}`}
-                          value={o.status}
-                          disabled={updatingId === o.id}
-                          onChange={(e) => handleStatusChange(o.id || o.orderNumber, e.target.value)}
+                        <span
+                          style={{
+                            background: '#eef9f8',
+                            color: '#04959d',
+                            fontWeight: 800,
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}
                         >
-                          <option value="Processing">⏳ Processing</option>
-                          <option value="Ready for Pickup">🏥 Ready for Pickup</option>
-                          <option value="Shipped">🚚 Shipped</option>
-                          <option value="Delivered">✅ Delivered</option>
-                          <option value="Cancelled">❌ Cancelled</option>
-                        </select>
+                          {sms.template_type || 'custom'}
+                        </span>
                       </td>
-
-                      {/* Actions */}
+                      <td className="orders-td" style={{ fontSize: '12px', color: '#557e79', whiteSpace: 'nowrap' }}>
+                        {sms.sent_by || 'Admin Staff'}
+                      </td>
                       <td className="orders-td" style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="order-action-btn"
-                          title="View order tracking & receipt"
-                          onClick={() => setViewingOrder(o)}
+                        <span
+                          style={{
+                            background: '#e9f8f3',
+                            color: '#00a86b',
+                            padding: '3px 9px',
+                            borderRadius: '12px',
+                            fontWeight: 800,
+                            fontSize: '11.5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
                         >
-                          <Eye size={13} />
-                          Details
-                        </button>
+                          <CheckCircle2 size={12} /> Sent
+                        </span>
                       </td>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Order Details Modal ── */}
       {viewingOrder && (
@@ -560,7 +725,7 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
                       </div>
                     </div>
                     <a
-                      href={viewingOrder.paymentSlip}
+                      href={mediaUrl(viewingOrder.paymentSlip)}
                       target="_blank"
                       rel="noreferrer"
                       style={{ background: '#04959d', color: '#fff', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -611,6 +776,124 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
                     </span>
                   </div>
                 )}
+
+                {/* SMS Live Notifications & Communication Card */}
+                <div
+                  style={{
+                    marginTop: '16px',
+                    padding: '16px 18px',
+                    background: '#f0f9f8',
+                    borderRadius: '14px',
+                    border: '1.5px solid #bce8e3',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                      marginBottom: viewingOrderSms.length > 0 ? '14px' : '0',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '10px',
+                          background: '#ffffff',
+                          display: 'grid',
+                          placeItems: 'center',
+                          color: '#04959d',
+                          boxShadow: '0 2px 8px rgba(4, 149, 157, 0.15)',
+                        }}
+                      >
+                        <MessageSquare size={20} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong style={{ fontSize: '14px', color: '#123835' }}>
+                            Customer SMS Updates
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              background: '#e0f5ee',
+                              color: '#00a86b',
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                            }}
+                          >
+                            ✓ Gateway Active
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#557e79' }}>
+                          Linked phone: <strong>{viewingOrder.phone || 'No phone'}</strong> &bull;{' '}
+                          {viewingOrderSms.length} message{viewingOrderSms.length !== 1 ? 's' : ''} dispatched
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="orders-create-btn"
+                      style={{ padding: '8px 18px', fontSize: '12.5px' }}
+                      onClick={() => setSmsModalOrder(viewingOrder)}
+                    >
+                      <Send size={14} />
+                      <span>Send New SMS</span>
+                    </button>
+                  </div>
+
+                  {/* SMS History List for this Order */}
+                  {loadingViewingOrderSms ? (
+                    <div style={{ fontSize: '12px', color: '#7a9f9b', padding: '8px 0' }}>
+                      Loading SMS history...
+                    </div>
+                  ) : viewingOrderSms.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #d8ece7', paddingTop: '12px' }}>
+                      {viewingOrderSms.map((sms) => (
+                        <div
+                          key={sms.id}
+                          style={{
+                            background: '#ffffff',
+                            borderRadius: '10px',
+                            padding: '10px 14px',
+                            border: '1px solid #e1efe9',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              marginBottom: '4px',
+                              fontSize: '11.5px',
+                            }}
+                          >
+                            <span style={{ fontWeight: 800, color: '#04959d', textTransform: 'uppercase' }}>
+                              {sms.template_type || 'update'}
+                            </span>
+                            <span style={{ color: '#7a9f9b' }}>{sms.created_at}</span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: '12.5px', color: '#173d3b', lineHeight: '1.4' }}>
+                            {sms.message}
+                          </p>
+                          <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#9bb8b4' }}>
+                            Dispatched to <strong>{sms.recipient_phone}</strong> by {sms.sent_by || 'Admin Staff'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#7a9f9b', marginTop: '6px' }}>
+                      No SMS sent yet. Click <strong>Send New SMS</strong> above to notify customer of tracking or status updates.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Items List */}
@@ -687,6 +970,16 @@ export default function OrdersView({ onOpenCreateOrder, showToast }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Send SMS Notification Modal ── */}
+      {smsModalOrder && (
+        <SendSmsModal
+          order={smsModalOrder}
+          onClose={() => setSmsModalOrder(null)}
+          showToast={showToast}
+          onSmsSent={handleSmsSent}
+        />
       )}
     </div>
   )

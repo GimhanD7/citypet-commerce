@@ -1,0 +1,93 @@
+.admin-operations-page:is(.pm-page, .orders-admin-page, .payments-admin-page) {
+  min-width: 0;
+  gap: clamp(12px, 1.5vw, 20px);
+  padding: clamp(12px, 2vw, 28px);
+}
+
+.admin-operations-page :is(.pm-page-header, .orders-page-header, .payments-page-header) {
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-operations-page :is(.pm-page-title, .orders-page-title, .payments-page-title) {
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.2;
+}
+
+.admin-operations-page :is(.pm-kpi-grid, .pm-kpi-strip, .orders-kpi-grid, .payments-kpi-grid) {
+  gap: 12px;
+}
+
+.admin-operations-page :is(.pm-kpi-card, .orders-kpi-card, .payments-kpi-card) {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.admin-operations-page :is(.pm-toolbar, .orders-toolbar, .payments-toolbar) {
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.admin-operations-page :is(.pm-table-card, .orders-table-card, .payments-table-card) {
+  min-width: 0;
+  border-radius: 14px;
+}
+
+.admin-operations-page :is(.pm-th, .orders-th, .payments-th),
+.admin-operations-page :is(.pm-td, .orders-td, .payments-td) {
+  padding: 9px 12px;
+}
+
+.admin-operations-page :is(button, select, input):focus-visible {
+  outline: 2px solid #04959d;
+  outline-offset: 2px;
+}
+
+.operations-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #9c3931;
+}
+
+.payment-print-sheet { display: none; }
+
+@media (max-width: 700px) {
+  .admin-operations-page :is(.pm-kpi-strip, .orders-kpi-grid, .payments-kpi-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-operations-page :is(.pm-search-box, .orders-search-box, .payments-search-box) {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+}
+
+@media print {
+  body:has(> .payment-print-sheet) > :not(.payment-print-sheet) { display: none !important; }
+  body > .payment-print-sheet {
+    display: block;
+    padding: 24px;
+    color: #173d3b;
+  }
+  .payment-print-sheet dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 8px 0;
+    border-bottom: 1px solid #dbe5e3;
+  }
+  .payment-print-sheet dd { margin: 0; }
+}
+
+.counter-order-fields {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

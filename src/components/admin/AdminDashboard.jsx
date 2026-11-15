@@ -10,7 +10,6 @@ import {
 } from './data/adminMockData'
 
 // Modular Components
-import AdminFooter from './AdminFooter'
 import AdminHeader from './AdminHeader'
 import AdminSidebar from './AdminSidebar'
 import AddProductModal from './modals/AddProductModal'
@@ -26,9 +25,10 @@ import ReviewsView from './views/ReviewsView'
 import OrdersView from './views/OrdersView'
 import PaymentsView from './views/PaymentsView'
 import ReportsView from './views/ReportsView'
+import SettingsView from './views/SettingsView'
 import { activityService } from '../../services/api'
 
-export default function AdminDashboard({ onNavigate, onLogout }) {
+export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
   // Navigation & View States
   // Restore the last-visited admin tab on mount (survives page refresh)
   const [activeTab, setActiveTabRaw] = useState(() => {
@@ -53,6 +53,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
 
   // Products Management State
+  const [orderRevision, setOrderRevision] = useState(0)
   const [adminProducts, setAdminProducts] = useState(storeProducts)
   const [productSearch, setProductSearch] = useState('')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
@@ -99,18 +100,14 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
 
   // Quick Stock Quantity Increment/Decrement Handler (supports variant-level restocking)
   const handleUpdateStockCount = async (productId, changeQty, variantIndex = null) => {
-    const lockKey = `${productId}_${variantIndex ?? 'all'}_${changeQty}`
+    const lockKey = productId
     if (stockUpdateInFlight.current.has(lockKey)) {
       console.warn(`[handleUpdateStockCount] Ignored duplicate stock update for ${lockKey}`)
       return
     }
-    stockUpdateInFlight.current.add(lockKey)
-    setTimeout(() => {
-      stockUpdateInFlight.current.delete(lockKey)
-    }, 2000)
-
     const target = adminProducts.find((p) => p.id === productId)
     if (!target) return
+    stockUpdateInFlight.current.add(lockKey)
 
     let newCount = 0
     let updatedSizes = target.sizes ? [...target.sizes] : []
@@ -120,7 +117,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
       const currentVariant = updatedSizes[variantIndex]
       variantName = currentVariant.size || `Variant #${variantIndex + 1}`
       const currentVariantQty = currentVariant.stockCount !== undefined ? currentVariant.stockCount : 0
-      const newVariantQty = Math.max(0, currentVariantQty + changeQty)
+      const newVariantQty = Math.max(0, Number(currentVariantQty) + changeQty)
       updatedSizes[variantIndex] = {
         ...currentVariant,
         stockCount: newVariantQty,
@@ -128,25 +125,12 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
       newCount = updatedSizes.reduce((s, item) => s + (parseInt(item.stockCount, 10) || 0), 0)
     } else {
       const currentCount = target.stockCount !== undefined ? target.stockCount : (target.inStock ? 15 : 0)
-      newCount = Math.max(0, currentCount + changeQty)
+      newCount = Math.max(0, Number(currentCount) + changeQty)
     }
 
     const newInStock = newCount > 0
 
-    // 1. Optimistically update local admin products
-    setAdminProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== productId) return p
-        return {
-          ...p,
-          stockCount: newCount,
-          inStock: newInStock,
-          sizes: updatedSizes.length > 0 ? updatedSizes : p.sizes,
-        }
-      })
-    )
-
-    // 2. Persist to Backend API via PUT
+    // Persist the stock change before updating the visible inventory.
     try {
       const putPayload = {
         inStock: newInStock,
@@ -157,8 +141,14 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
       }
       await productService.updateProduct(productId, putPayload)
     } catch (err) {
-      console.warn('Failed to update stock count in backend:', err.message)
+      showToast(err.message || 'Unable to update stock.')
+      return
+    } finally {
+      stockUpdateInFlight.current.delete(lockKey)
     }
+    setAdminProducts((products) => products.map((product) => product.id === productId
+      ? { ...product, stockCount: newCount, inStock: newInStock, sizes: updatedSizes }
+      : product))
 
     // 3. Log Activity
     const desc = variantName
@@ -189,6 +179,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
       : `Inventory restocked: "${target.name}" is now ${newCount} units (${newInStock ? 'In Stock' : 'Out of Stock'})!`
 
     showToast(toastMsg)
+    return true
   }
 
   // Load Products from API
@@ -230,7 +221,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
     return () => {
       mounted = false
     }
-  }, [activeTab])
+  }, [activeTab, orderRevision])
 
   // Product CRUD Handlers
   const handleOpenAddProduct = () => {
@@ -443,6 +434,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
         setActiveTab={setActiveTab}
         onNavigate={onNavigate}
         onLogout={onLogout}
+        authUser={authUser}
       />
 
       {/* Main Admin Workspace (Sidebar + Dynamic Main View Canvas) */}
@@ -488,6 +480,7 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
             />
           ) : activeTab === 'orders' ? (
             <OrdersView
+              key={orderRevision}
               onOpenCreateOrder={() => setActiveModal('createOrder')}
               showToast={showToast}
             />
@@ -503,6 +496,15 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
             <ReviewsView adminProducts={adminProducts} showToast={showToast} />
           ) : activeTab === 'users' ? (
             <UsersView onSessionExpired={onLogout} />
+          ) : activeTab === 'settings' || activeTab === 'sms' ? (
+            <SettingsView
+              initialTab={activeTab === 'sms' ? 'sms' : 'general'}
+              adminProducts={adminProducts}
+              setAdminProducts={setAdminProducts}
+              showToast={showToast}
+              setActiveTab={setActiveTab}
+              authUser={authUser}
+            />
           ) : (
             <GenericSubView
               activeTab={activeTab}
@@ -512,9 +514,6 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
           )}
         </main>
       </div>
-
-      {/* Dark Green Admin Footer */}
-      <AdminFooter setActiveTab={setActiveTab} showToast={showToast} />
 
       {/* Modals */}
       {activeModal === 'addProduct' && (
@@ -529,8 +528,12 @@ export default function AdminDashboard({ onNavigate, onLogout }) {
 
       {activeModal === 'createOrder' && (
         <CreateOrderModal
-          recentOrders={recentOrders}
-          setRecentOrders={setRecentOrders}
+          products={adminProducts}
+          onCreated={(order) => {
+            setOrderRevision((revision) => revision + 1)
+            setActiveModal(null)
+            showToast('Order ' + order.orderNumber + ' created.')
+          }}
           onClose={() => setActiveModal(null)}
           showToast={showToast}
         />

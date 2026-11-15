@@ -53,7 +53,7 @@ export default function AccountModal({ isOpen, onClose, authUser = null }) {
             className={`account-tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveTab('profile')}
           >
-            <PawPrint size={16} /> Pet & Owner Profile
+            <User size={16} /> Owner Profile
           </button>
           <button
             className={`account-tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
@@ -68,30 +68,6 @@ export default function AccountModal({ isOpen, onClose, authUser = null }) {
           {activeTab === 'profile' ? (
             <form onSubmit={handleSave} className="account-form">
               <div className="form-section-title">
-                <PawPrint size={15} /> <span>Pet Details</span>
-              </div>
-              <div className="form-grid-two">
-                <div className="form-field">
-                  <label>Pet's Name</label>
-                  <input
-                    type="text"
-                    value={formData.petName}
-                    onChange={(e) => setFormData({ ...formData, petName: e.target.value })}
-                    placeholder="Enter pet name"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Breed / Species</label>
-                  <input
-                    type="text"
-                    value={formData.petType}
-                    onChange={(e) => setFormData({ ...formData, petType: e.target.value })}
-                    placeholder="Enter breed or species"
-                  />
-                </div>
-              </div>
-
-              <div className="form-section-title mt-4">
                 <User size={15} /> <span>Owner & Delivery Info</span>
               </div>
               <div className="form-grid-two">

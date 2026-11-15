@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../../config/media'
 import React, { useState } from 'react'
 import { ImagePlus, Film, X, Link, Upload, Video, Image as ImageIcon, Plus } from 'lucide-react'
 import { apiFetch } from '../../../config/api'
@@ -39,9 +40,9 @@ export default function ProductMediaFields({ form, setForm, onUploading }) {
       const session = await apiFetch('auth.php?action=session')
       for (const file of files) {
         const isImage = file.type.startsWith('image/')
-        const maxLimit = isImage ? 5 * 1024 * 1024 : 30 * 1024 * 1024
+        const maxLimit = isImage ? 5 * 1024 * 1024 : 20 * 1024 * 1024
         if (file.size > maxLimit) {
-          throw new Error(`${isImage ? 'Image' : 'Video'} exceeds size limit (${isImage ? '5 MB' : '30 MB'}).`)
+          throw new Error(`${isImage ? 'Image' : 'Video'} exceeds size limit (${isImage ? '5 MB' : '20 MB'}).`)
         }
 
         const body = new FormData()
@@ -50,6 +51,7 @@ export default function ProductMediaFields({ form, setForm, onUploading }) {
 
         const media = await apiFetch('media.php', { method: 'POST', body, timeout: 60000 })
         
+        if (!media?.url || (isMain && media.type !== 'image')) throw new Error('The server did not return a usable image.')
         if (isMain) {
           setForm((prev) => ({ ...prev, mainImage: media.url }))
         } else {
@@ -137,7 +139,7 @@ export default function ProductMediaFields({ form, setForm, onUploading }) {
 
           <div className="slot-preview-area">
             {form.mainImage ? (
-              <img src={form.mainImage} alt="Main product preview" className="slot-media-img" />
+              <img src={mediaUrl(form.mainImage)} alt="Main product preview" className="slot-media-img" onError={() => setError("The main image could not be loaded. Choose another file or URL.")} />
             ) : (
               <div className="slot-empty-state">
                 <ImagePlus size={36} className="empty-icon" />
@@ -207,9 +209,9 @@ export default function ProductMediaFields({ form, setForm, onUploading }) {
 
             <div className="slot-preview-area">
               {item.type === 'video' ? (
-                <video src={item.url} controls preload="metadata" className="slot-media-video" />
+                <video src={mediaUrl(item.url)} controls preload="metadata" className="slot-media-video" />
               ) : (
-                <img src={item.url} alt={`Gallery preview ${index + 1}`} className="slot-media-img" />
+                <img src={mediaUrl(item.url)} alt={`Gallery preview ${index + 1}`} className="slot-media-img" />
               )}
             </div>
 

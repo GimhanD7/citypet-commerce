@@ -21,22 +21,75 @@ export default function AdminFooter({ setActiveTab, showToast }) {
 
         {/* Quick Links */}
         <div className="footer-nav-col">
-          <h4>Quick Links</h4>
-          <a href="#dashboard" onClick={(e) => { e.preventDefault(); setActiveTab('dashboard') }}>Dashboard</a>
-          <a href="#orders" onClick={(e) => { e.preventDefault(); setActiveTab('orders') }}>Orders</a>
-          <a href="#products" onClick={(e) => { e.preventDefault(); setActiveTab('products') }}>Products</a>
-          <a href="#users" onClick={(e) => { e.preventDefault(); setActiveTab('users') }}>Users</a>
-          <a href="#pets" onClick={(e) => { e.preventDefault(); setActiveTab('pets') }}>Pets</a>
+          <h4 className="footer-col-head">Quick Links</h4>
+          <div className="footer-nav-link-list">
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => setActiveTab('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => setActiveTab('orders')}
+            >
+              Orders &amp; Dispensing
+            </button>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => setActiveTab('products')}
+            >
+              Medical Products
+            </button>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => setActiveTab('users')}
+            >
+              Users &amp; Roles
+            </button>
+          </div>
         </div>
 
         {/* Help & Support */}
         <div className="footer-nav-col">
-          <h4>Help & Support</h4>
-          <a href="#guide" onClick={(e) => { e.preventDefault(); showToast('User guide opened') }}>User Guide</a>
-          <a href="tel:+94112345678">Contact Support</a>
-          <a href="#status" onClick={(e) => { e.preventDefault(); showToast('All systems operational: 100%') }}>System Status</a>
-          <a href="#privacy" onClick={(e) => { e.preventDefault(); showToast('Privacy policy: HIPAA & GDPR compliant') }}>Privacy Policy</a>
-          <a href="#terms" onClick={(e) => { e.preventDefault(); showToast('Terms of Service: v2024.1') }}>Terms of Service</a>
+          <h4 className="footer-col-head">Help &amp; Support</h4>
+          <div className="footer-nav-link-list">
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => showToast('User guide opened')}
+            >
+              User Guide
+            </button>
+            <a href="tel:+94112345678" className="footer-nav-link-btn">
+              Contact Support
+            </a>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => showToast('All systems operational: 100%')}
+            >
+              System Status
+            </button>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => showToast('HIPAA & GDPR compliant privacy standards')}
+            >
+              Privacy Policy
+            </button>
+            <button
+              type="button"
+              className="footer-nav-link-btn"
+              onClick={() => showToast('Terms of Service: v2024.1')}
+            >
+              Terms of Service
+            </button>
+          </div>
         </div>
 
         {/* Cursive Brand Script */}

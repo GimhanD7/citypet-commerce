@@ -5,7 +5,13 @@ import StoreProducts from './StoreProducts'
 import StoreVetBanner from './StoreVetBanner'
 import StoreTrustBadges from './StoreTrustBadges'
 
-export default function Store({ onAddToCart, onNavigateToCatalog, onSelectProduct }) {
+export default function Store({
+  onAddToCart,
+  onNavigateToCatalog,
+  onSelectProduct,
+  savedItems = [],
+  onToggleWishlist,
+}) {
   const [selectedCategory, setSelectedCategory] = useState('all')
 
   const scrollToSection = (id) => {
@@ -71,6 +77,8 @@ export default function Store({ onAddToCart, onNavigateToCatalog, onSelectProduc
         onAddToCart={onAddToCart}
         onViewAllProducts={handleViewAllProducts}
         onSelectProduct={onSelectProduct}
+        savedItems={savedItems}
+        onToggleWishlist={onToggleWishlist}
       />
 
       {/* Vet Selected Promo Banner */}

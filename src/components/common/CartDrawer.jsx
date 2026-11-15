@@ -1,7 +1,9 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { orderService } from '../../services/api'
 import {
   AlertCircle,
   ArrowRight,
+  Bookmark,
   Minus,
   Plus,
   ShoppingBag,
@@ -21,7 +23,22 @@ export default function CartDrawer({
   onUpdateQty,
   onRemoveItem,
   onOpenCheckout,
+  savedItems = [],
+  onSaveForLater,
+  onMoveToCart,
+  onRemoveSaved,
 }) {
+  const [delivery, setDelivery] = useState(null)
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
+    setDelivery(null)
+    orderService.getDeliverySettings()
+      .then(([method]) => { if (active) setDelivery(method ?? null) })
+      .catch(() => { /* Checkout loads rates again before accepting an order. */ })
+    return () => { active = false }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const isProductOut = (product) => {
@@ -38,9 +55,9 @@ export default function CartDrawer({
     (sum, item) => sum + item.product.price * item.quantity,
     0
   )
-  const freeShippingThreshold = 10000
-  const isFreeShipping = subtotal >= freeShippingThreshold
-  const shippingFee = subtotal > 0 && !isFreeShipping ? 450 : 0
+  const freeShippingThreshold = delivery?.freeDeliveryThreshold
+  const isFreeShipping = delivery && (delivery.fee === 0 || Math.round(subtotal * 100) / 100 >= freeShippingThreshold)
+  const shippingFee = subtotal > 0 && delivery && !isFreeShipping ? delivery.fee : 0
   const total = subtotal + shippingFee
 
   return (
@@ -61,7 +78,7 @@ export default function CartDrawer({
         </div>
 
         {/* Free Shipping Progress Bar */}
-        {cartItems.length > 0 && (
+        {delivery && cartItems.length > 0 && (
           <div className="shipping-progress-banner">
             <div className="shipping-progress-text">
               <Truck size={16} />
@@ -79,7 +96,7 @@ export default function CartDrawer({
               <div
                 className="shipping-progress-fill"
                 style={{
-                  width: `${Math.min(100, (subtotal / freeShippingThreshold) * 100)}%`,
+                  width: `${isFreeShipping ? 100 : Math.min(100, (subtotal / freeShippingThreshold) * 100)}%`,
                 }}
               />
             </div>
@@ -121,14 +138,26 @@ export default function CartDrawer({
                             <span className="cart-out-badge">Out of Stock</span>
                           )}
                         </div>
-                        <button
-                          className="cart-item-remove-btn"
-                          onClick={() => onRemoveItem(itemKey)}
-                          aria-label={`Remove ${product.name}`}
-                          title="Remove item"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="cart-item-actions-top">
+                          <button
+                            type="button"
+                            className="cart-item-save-btn"
+                            onClick={() => onSaveForLater && onSaveForLater(product)}
+                            aria-label={`Save ${product.name} for later`}
+                            title="Save for Later"
+                          >
+                            <Bookmark size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="cart-item-remove-btn"
+                            onClick={() => onRemoveItem(itemKey)}
+                            aria-label={`Remove ${product.name}`}
+                            title="Remove item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
                       <h5 className="cart-item-name">{product.name}</h5>
                       {product.selectedSize && (
@@ -169,6 +198,50 @@ export default function CartDrawer({
               })}
             </div>
           )}
+
+          {/* Saved for Later Section */}
+          {savedItems && savedItems.length > 0 && (
+            <div className="cart-saved-section">
+              <div className="cart-saved-header">
+                <h5>
+                  <Bookmark size={15} color="#04959d" />
+                  <span>Saved for Later ({savedItems.length})</span>
+                </h5>
+              </div>
+              <div className="cart-saved-list">
+                {savedItems.map((item) => (
+                  <div key={item.id} className="cart-saved-item">
+                    <div className="cart-saved-item-visual">
+                      <ProductVisual type={item.imageType} name={item.name} />
+                    </div>
+                    <div className="cart-saved-item-info">
+                      <h6 className="cart-saved-item-name">{item.name}</h6>
+                      <strong className="cart-saved-item-price">
+                        LKR {Number(item.price || 0).toLocaleString()}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="cart-move-btn"
+                        onClick={() => onMoveToCart && onMoveToCart(item)}
+                      >
+                        Move to Cart
+                      </button>
+                      <button
+                        type="button"
+                        className="cart-saved-del-btn"
+                        onClick={() => onRemoveSaved && onRemoveSaved(item)}
+                        title="Remove from saved"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cart Drawer Footer */}
@@ -186,7 +259,7 @@ export default function CartDrawer({
             </div>
             <div className="cart-summary-line">
               <span>Islandwide Delivery</span>
-              <span>{isFreeShipping ? <strong className="text-free">FREE</strong> : `LKR ${shippingFee}`}</span>
+              <span>{!delivery ? "Calculated at checkout" : isFreeShipping ? <strong className="text-free">FREE</strong> : `LKR ${shippingFee}`}</span>
             </div>
             <div className="cart-summary-total">
               <span>Estimated Total</span>

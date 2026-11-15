@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../config/media'
 import React, { useEffect, useState } from 'react'
 import {
   AlertCircle,
@@ -50,6 +51,8 @@ export default function CustomerProfile({
   onNavigate,
   onAddToCart,
   onSelectProduct,
+  savedItems = [],
+  onToggleWishlist,
 }) {
   const storeProducts = useStoreProducts()
   const [activeTab, setActiveTab] = useState('dashboard') // dashboard | orders | track | wishlist | addresses | pets | settings
@@ -358,22 +361,28 @@ export default function CustomerProfile({
     }
   }
 
-  const handleProfileImageChange = (e) => {
+  const [profileImageUploading, setProfileImageUploading] = useState(false)
+  const [profileImageError, setProfileImageError] = useState("")
+
+  const handleProfileImageChange = async (e) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file.')
+    e.target.value = ''
+    if (!file || profileImageUploading) return
+    setProfileImageError('')
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setProfileImageError('Choose a JPG, PNG, or WebP image up to 2 MB.')
       return
     }
-    if (file.size > 1024 * 1024) {
-      alert('Please choose an image smaller than 1 MB.')
-      return
+    setProfileImageUploading(true)
+    try {
+      const { url } = await profileService.uploadImage(file)
+      if (!url) throw new Error('The server did not return a saved photo.')
+      setSettingsForm((previous) => ({ ...previous, avatar: url }))
+    } catch (error) {
+      setProfileImageError(error.message || 'Unable to upload your profile photo.')
+    } finally {
+      setProfileImageUploading(false)
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setSettingsForm((prev) => ({ ...prev, avatar: String(reader.result || '') }))
-    }
-    reader.readAsDataURL(file)
   }
 
   function resetPetForm() {
@@ -434,12 +443,11 @@ export default function CustomerProfile({
     { id: 'track', label: 'Track Order', icon: Truck },
     { id: 'wishlist', label: 'Wishlist', icon: Heart },
     { id: 'addresses', label: 'Addresses', icon: MapPin },
-    { id: 'pets', label: 'Pet Profiles', icon: PawPrint },
     { id: 'settings', label: 'Account Settings', icon: Settings },
   ]
 
   const mobileMenuItems = [
-    { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+    { id: 'store', label: 'Store', icon: LayoutDashboard },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'track', label: 'Track', icon: Truck },
     { id: 'wishlist', label: 'Wishlist', icon: Heart },
@@ -447,6 +455,10 @@ export default function CustomerProfile({
   ]
 
   const handleProfileTabChange = (tabId) => {
+    if (tabId === 'store') {
+      if (onNavigate) onNavigate('store', 'store-page')
+      return
+    }
     setActiveTab(tabId)
     if (tabId === 'track' && !trackingOrder && orders.length > 0) {
       setTrackingOrder(orders[0])
@@ -623,26 +635,25 @@ export default function CustomerProfile({
                     <div className="metric-info">
                       <span className="metric-label">Wishlist Items</span>
                       <strong className="metric-value">
-                        {profile?.stats?.wishlistCount ?? 0}
+                        {savedItems?.length ?? 0}
                       </strong>
-                      <span className="metric-link">View Wishlist →</span>
                     </div>
                   </div>
 
-                  {/* Card 3: Pet Profiles */}
+                  {/* Card 3: Saved Addresses */}
                   <div
                     className="profile-metric-card"
-                    onClick={() => setActiveTab('pets')}
+                    onClick={() => setActiveTab('addresses')}
                   >
                     <div className="metric-icon-circle mint-icon">
-                      <PawPrint size={22} />
+                      <MapPin size={22} />
                     </div>
                     <div className="metric-info">
-                      <span className="metric-label">Pet Profiles</span>
+                      <span className="metric-label">Saved Addresses</span>
                       <strong className="metric-value">
-                        {petsLoaded ? (pets.length ?? profile?.stats?.petProfilesCount ?? 0) : (profile?.stats?.petProfilesCount ?? 0)}
+                        {(profile?.addresses || []).length}
                       </strong>
-                      <span className="metric-link">Manage Pets →</span>
+                      <span className="metric-link">Manage Addresses →</span>
                     </div>
                   </div>
                 </div>
@@ -743,114 +754,6 @@ export default function CustomerProfile({
                           ))}
                         </tbody>
                       </table>
-                    )}
-                  </div>
-                </section>
-
-                {/* 4. Your Pet Profiles Section */}
-                <section className="profile-section-card pets-section-card">
-                  <div className="profile-card-header">
-                    <div>
-                      <span className="section-sub-eyebrow">YOUR PET PROFILES</span>
-                      <h2 className="section-heading-custom">Your furry family</h2>
-                    </div>
-                    <button
-                      className="store-text-link"
-                      onClick={() => setActiveTab('pets')}
-                    >
-                      Manage Pets <ArrowRight size={16} />
-                    </button>
-                  </div>
-
-                  {/* Pet Cards Grid — dynamic from API */}
-                  <div className="pet-profiles-grid">
-                    {!petsLoaded ? (
-                      <div className="profile-empty-state" style={{ gridColumn: '1 / -1', padding: '32px', textAlign: 'center', color: '#9ab3b0' }}>
-                        <div style={{ fontSize: 13 }}>Loading pet profiles…</div>
-                      </div>
-                    ) : pets.length === 0 ? (
-                      <div className="profile-empty-state" style={{ gridColumn: '1 / -1' }}>
-                        <div className="empty-state-icon-wrap">
-                          <span style={{ fontSize: 36 }}>🐾</span>
-                        </div>
-                        <h3 className="empty-state-title">No pet profiles yet</h3>
-                        <p className="empty-state-desc">Add your pet's profile to access vet records, shop by pet, and get personalised care tips.</p>
-                        <button
-                          className="empty-state-cta-btn"
-                          onClick={() => setActiveTab('pets')}
-                        >
-                          Add Pet Profile →
-                        </button>
-                      </div>
-                    ) : (
-                      pets.slice(0, 2).map((pet, idx) => (
-                        <div key={pet.id || idx} className="pet-profile-card">
-                          <div className="pet-card-avatar-wrap">
-                            {pet.photoUrl ? (
-                              <img src={pet.photoUrl} alt={pet.name} className="pet-card-avatar-img" />
-                            ) : (
-                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42 }}>
-                                {(pet.species || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="pet-card-content">
-                            <div className="pet-card-top-row">
-                              <h3 className="pet-name">{pet.name}</h3>
-                            <button
-                              className="pet-edit-btn"
-                              aria-label={`Edit ${pet.name}'s profile`}
-                              onClick={() => handleEditPet(pet)}
-                            >
-                              <Edit2 size={15} />
-                            </button>
-                            </div>
-
-                            <span className="pet-breed-line">
-                              {(pet.species || '').toLowerCase().includes('cat') ? '🐱' : '🐕'} {pet.species || 'Pet'}{pet.breed ? ` • ${pet.breed}` : ''}
-                            </span>
-
-                            <div className="pet-info-grid">
-                              {pet.age && (
-                                <div className="pet-info-col">
-                                  <span className="info-key">Age</span>
-                                  <strong className="info-val">{pet.age}</strong>
-                                </div>
-                              )}
-                              {pet.primaryVet && (
-                                <div className="pet-info-col">
-                                  <span className="info-key">Primary Vet</span>
-                                  <strong className="info-val">{pet.primaryVet}</strong>
-                                </div>
-                              )}
-                              {pet.lastVisit && (
-                                <div className="pet-info-col">
-                                  <span className="info-key">Last Visit</span>
-                                  <strong className="info-val">{pet.lastVisit}</strong>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="pet-card-buttons-row">
-                              <button
-                                className="pet-btn-records"
-                                onClick={() => setSelectedPetRecord(pet)}
-                              >
-                                <FileText size={15} />
-                                <span>View Records</span>
-                              </button>
-                              <button
-                                className="pet-btn-shop"
-                                onClick={() => handleShopForPet(pet)}
-                              >
-                                <ShoppingBag size={15} />
-                                <span>Shop for this Pet</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
                     )}
                   </div>
                 </section>
@@ -1412,58 +1315,88 @@ export default function CustomerProfile({
                 <div className="profile-card-header">
                   <div>
                     <span className="section-sub-eyebrow">SAVED ITEMS</span>
-                    <h2 className="section-heading-custom">My Wishlist (8 items)</h2>
+                    <h2 className="section-heading-custom">My Wishlist ({savedItems.length} {savedItems.length === 1 ? 'item' : 'items'})</h2>
                   </div>
                 </div>
 
-                <div className="store-products-grid">
-                  {storeProducts.slice(0, 4).map((prod) => {
-                    const stockCount = prod.stockCount !== undefined ? prod.stockCount : (prod.inStock ? 15 : 0)
-                    const isOut = stockCount === 0 || !prod.inStock
+                {savedItems.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px', background: '#f8faf9', borderRadius: '16px', border: '1px solid #e2eee8' }}>
+                    <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: '#fff0f0', color: '#ed7f72', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+                      <Heart size={28} />
+                    </div>
+                    <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: 800, color: '#123835' }}>Your Wishlist is Empty</h3>
+                    <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#688d88', maxWidth: '420px', marginLeft: 'auto', marginRight: 'auto' }}>
+                      You haven't saved any items yet. Browse our pet store and tap the heart icon on any product to save it here for later.
+                    </p>
+                    <button
+                      type="button"
+                      className="button primary"
+                      onClick={() => onNavigate('catalog')}
+                      style={{ padding: '10px 22px', fontSize: '13.5px' }}
+                    >
+                      <ShoppingBag size={16} /> Browse Online Store
+                    </button>
+                  </div>
+                ) : (
+                  <div className="store-products-grid">
+                    {savedItems.map((prod) => {
+                      const stockCount = prod.stockCount !== undefined ? prod.stockCount : (prod.inStock ? 15 : 0)
+                      const isOut = stockCount === 0 || !prod.inStock
 
-                    return (
-                      <article
-                        key={prod.id}
-                        className="store-product-card clickable-product-card"
-                        onClick={() => onSelectProduct && onSelectProduct(prod)}
-                      >
-                        <div className="product-card-top">
-                          <span className="product-badge-pill">Saved</span>
-                          <Heart size={16} fill="#ed7f72" color="#ed7f72" />
-                        </div>
-                        <div className="product-card-visual-area">
-                          <ProductVisual type={prod.imageType} name={prod.name} />
-                        </div>
-                        <div className="product-card-info">
-                          <h4 className="product-card-title">{prod.name}</h4>
-                          <strong className="product-main-price">
-                            LKR {prod.price.toLocaleString()}
-                          </strong>
-                          <button
-                            className={`product-add-cart-btn ${isOut ? 'disabled' : ''}`}
-                            disabled={isOut}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (!isOut) {
-                                onAddToCart(prod)
-                              }
-                            }}
-                          >
-                            {isOut ? (
-                              <>
-                                <X size={15} /> Out of Stock
-                              </>
-                            ) : (
-                              <>
-                                <ShoppingBag size={15} /> Add to Cart
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </article>
-                    )
-                  })}
-                </div>
+                      return (
+                        <article
+                          key={prod.id}
+                          className="store-product-card clickable-product-card"
+                          onClick={() => onSelectProduct && onSelectProduct(prod)}
+                        >
+                          <div className="product-card-top">
+                            <span className="product-badge-pill">Saved</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onToggleWishlist && onToggleWishlist(prod)
+                              }}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '4px' }}
+                              title="Remove from Wishlist"
+                            >
+                              <Heart size={16} fill="#ed7f72" color="#ed7f72" />
+                            </button>
+                          </div>
+                          <div className="product-card-visual-area">
+                            <ProductVisual type={prod.imageType} name={prod.name} />
+                          </div>
+                          <div className="product-card-info">
+                            <h4 className="product-card-title">{prod.name}</h4>
+                            <strong className="product-main-price">
+                              LKR {Number(prod.price || 0).toLocaleString()}
+                            </strong>
+                            <button
+                              className={`product-add-cart-btn ${isOut ? 'disabled' : ''}`}
+                              disabled={isOut}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (!isOut) {
+                                  onAddToCart(prod)
+                                }
+                              }}
+                            >
+                              {isOut ? (
+                                <>
+                                  <X size={15} /> Out of Stock
+                                </>
+                              ) : (
+                                <>
+                                  <ShoppingBag size={15} /> Add to Cart
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1524,120 +1457,6 @@ export default function CustomerProfile({
             )}
 
             {/* ----------------------------------------------------
-                TAB 6: PET PROFILES
-               ---------------------------------------------------- */}
-            {activeTab === 'pets' && (
-              <div className="profile-section-card">
-                <div className="profile-card-header">
-                  <div>
-                    <span className="section-sub-eyebrow">FAMILY PROFILES</span>
-                    <h2 className="section-heading-custom">Manage Your Pets</h2>
-                  </div>
-                  <button
-                    className="button primary"
-                    style={{ padding: '8px 16px' }}
-                    onClick={() => setIsAddPetModalOpen(true)}
-                  >
-                    <Plus size={16} /> Add New Pet
-                  </button>
-                </div>
-
-                <div className="pet-profiles-grid">
-                  {!petsLoaded ? (
-                    <div className="profile-empty-state" style={{ gridColumn: '1 / -1', padding: '32px', textAlign: 'center', color: '#9ab3b0' }}>
-                      <div style={{ fontSize: 13 }}>Loading pet profiles…</div>
-                    </div>
-                  ) : pets.length === 0 ? (
-                    <div className="profile-empty-state" style={{ gridColumn: '1 / -1', padding: '36px 20px', textAlign: 'center' }}>
-                      <div className="empty-state-icon-wrap" style={{ margin: '0 auto 14px' }}>
-                        <span style={{ fontSize: 36 }}>🐾</span>
-                      </div>
-                      <h3 className="empty-state-title">No Pet Profiles Registered</h3>
-                      <p className="empty-state-desc">Add your dogs, cats, or other pets to receive personalized healthcare recommendations and maintain clinical history.</p>
-                      <button
-                        className="empty-state-cta-btn"
-                        onClick={() => setIsAddPetModalOpen(true)}
-                      >
-                        + Add Pet Profile
-                      </button>
-                    </div>
-                  ) : (
-                    pets.map((pet, idx) => (
-                      <div key={pet.id || idx} className="pet-profile-card">
-                        <div className="pet-card-avatar-wrap">
-                          {pet.photoUrl || (pet.avatarImg && pet.avatarImg.includes('.jpg')) ? (
-                            <img
-                              src={pet.photoUrl || (pet.species === 'Dog' ? petBuddyDog : petLunaCat)}
-                              alt={pet.name}
-                              className="pet-card-avatar-img"
-                            />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42 }}>
-                              {(pet.species || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
-                            </div>
-                          )}
-                        </div>
-                        <div className="pet-card-content">
-                          <div className="pet-card-top-row">
-                            <h3 className="pet-name">{pet.name}</h3>
-                            <button
-                              className="pet-edit-btn"
-                              aria-label={`Edit ${pet.name}`}
-                              onClick={() => handleEditPet(pet)}
-                            >
-                              <Edit2 size={15} />
-                            </button>
-                          </div>
-                          <span className="pet-breed-line">
-                            {pet.speciesEmoji || ((pet.species || '').toLowerCase().includes('cat') ? '🐱' : '🐕')} {pet.species} • {pet.breed || 'Breed Not Specified'}
-                          </span>
-                          <div className="pet-info-grid">
-                            <div className="pet-info-col">
-                              <span className="info-key">Age</span>
-                              <strong className="info-val">{pet.age || 'Not specified'}</strong>
-                            </div>
-                            <div className="pet-info-col">
-                              <span className="info-key">Primary Vet</span>
-                              <strong className="info-val">{pet.primaryVet || 'City Pet Vet'}</strong>
-                            </div>
-                            <div className="pet-info-col">
-                              <span className="info-key">Last Visit</span>
-                              <strong className="info-val">{pet.lastVisit || 'None recorded'}</strong>
-                            </div>
-                          </div>
-                          <div className="pet-card-buttons-row">
-                            <button
-                              className="pet-btn-records"
-                              onClick={() => setSelectedPetRecord(pet)}
-                            >
-                              <FileText size={15} />
-                              <span>View Records</span>
-                            </button>
-                            <button
-                              className="pet-btn-shop"
-                              onClick={() => handleShopForPet(pet)}
-                            >
-                              <ShoppingBag size={15} />
-                              <span>Shop for {pet.name}</span>
-                            </button>
-                            <button
-                              className="pet-btn-records pet-delete-btn"
-                              onClick={() => handleDeletePet(pet)}
-                              disabled={petSaving}
-                            >
-                              <X size={15} />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ----------------------------------------------------
                 TAB 7: ACCOUNT SETTINGS
                ---------------------------------------------------- */}
             {activeTab === 'settings' && (
@@ -1659,8 +1478,8 @@ export default function CustomerProfile({
                 <form onSubmit={handleSaveSettings}>
                   <div className="account-settings-hero">
                     <div className="account-settings-avatar">
-                      {settingsForm.avatar && (settingsForm.avatar.startsWith('data:image') || settingsForm.avatar.startsWith('/')) ? (
-                        <img src={settingsForm.avatar} alt={settingsForm.name || 'Profile'} />
+                      {mediaUrl(settingsForm.avatar) ? (
+                        <img src={mediaUrl(settingsForm.avatar)} alt={settingsForm.name || 'Profile'} />
                       ) : (
                         <span>{(settingsForm.name || profile.name || 'U').trim().charAt(0).toUpperCase()}</span>
                       )}
@@ -1670,16 +1489,18 @@ export default function CustomerProfile({
                       <span>{settingsForm.email || 'Add your email for order updates'}</span>
                       <label className="account-image-upload-btn">
                         <Upload size={15} />
-                        <span>Change Profile Image</span>
+                        <span>{profileImageUploading ? 'Uploading…' : 'Change profile image'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={profileImageUploading || settingsSaving}
                           onChange={handleProfileImageChange}
                         />
                       </label>
                     </div>
                   </div>
 
+                  {profileImageError && <p role="alert">{profileImageError}</p>}
                   <div className="settings-form-grid">
                     <div className="form-group">
                       <label>Full Name</label>
@@ -1713,7 +1534,7 @@ export default function CustomerProfile({
                     type="submit"
                     className="button primary"
                     style={{ marginTop: '20px' }}
-                    disabled={settingsSaving}
+                    disabled={settingsSaving || profileImageUploading}
                   >
                     {settingsSaving ? 'Saving Changes…' : 'Save Changes'}
                   </button>
@@ -1724,10 +1545,23 @@ export default function CustomerProfile({
         </div>
       </div>
 
+      {/* Fixed Go to Home button on mobile screen */}
+      <div className="profile-mobile-fixed-actions">
+        <button
+          type="button"
+          className="profile-mobile-fixed-home-btn"
+          onClick={() => onNavigate && onNavigate('home')}
+          aria-label="Go to Home Page"
+        >
+          <Home size={16} />
+          <span>Go to Home</span>
+        </button>
+      </div>
+
       <nav className="profile-mobile-bottom-nav" aria-label="Mobile account navigation">
         {mobileMenuItems.map((item) => {
           const Icon = item.icon
-          const isActive = activeTab === item.id
+          const isActive = activeTab === item.id || (item.id === 'store' && activeTab === 'dashboard')
           return (
             <button
               key={item.id}

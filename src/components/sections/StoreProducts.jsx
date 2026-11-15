@@ -18,13 +18,26 @@ export default function StoreProducts({
   onAddToCart,
   onViewAllProducts,
   onSelectProduct,
+  savedItems = [],
+  onToggleWishlist,
 }) {
   const storeProducts = useStoreProducts()
-  const [wishlist, setWishlist] = useState({})
+  const [localWishlist, setLocalWishlist] = useState({})
   const [addedAnimation, setAddedAnimation] = useState({})
 
-  const toggleWishlist = (id) => {
-    setWishlist((prev) => ({ ...prev, [id]: !prev[id] }))
+  const isProductSaved = (id) => {
+    if (savedItems && savedItems.length > 0) {
+      return savedItems.some((item) => (item.id || item) === id)
+    }
+    return !!localWishlist[id]
+  }
+
+  const toggleWishlist = (product) => {
+    if (onToggleWishlist) {
+      onToggleWishlist(product)
+    } else {
+      setLocalWishlist((prev) => ({ ...prev, [product.id]: !prev[product.id] }))
+    }
   }
 
   const handleAdd = (product) => {
@@ -64,29 +77,39 @@ export default function StoreProducts({
           </button>
         </div>
 
-        {/* Category Pill Filters */}
-        <div className="product-filters-row">
-          <button
-            className={`filter-pill-btn ${selectedCategory === 'all' ? 'active' : ''}`}
-            onClick={() => onSelectCategory('all')}
-          >
-            All Products
-          </button>
-          {storeCategories.map((cat) => (
+        {/* Active Category Filter Tag (if filtered) */}
+        {selectedCategory && selectedCategory !== 'all' && (
+          <div className="active-filter-indicator" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '14px', color: '#5a7b78' }}>
+              Filtered by: <strong style={{ color: '#04959d' }}>{storeCategories.find((c) => c.id === selectedCategory)?.name || selectedCategory}</strong>
+            </span>
             <button
-              key={cat.id}
-              className={`filter-pill-btn ${selectedCategory === cat.id ? 'active' : ''}`}
-              onClick={() => onSelectCategory(cat.id)}
+              type="button"
+              onClick={() => onSelectCategory && onSelectCategory('all')}
+              style={{
+                background: '#ebf5f3',
+                border: '1px solid #d4e8e3',
+                borderRadius: '20px',
+                padding: '4px 12px',
+                fontSize: '12.5px',
+                fontWeight: 700,
+                color: '#123835',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.2s ease',
+              }}
             >
-              <span>{cat.icon}</span> {cat.name}
+              All Products <X size={13} />
             </button>
-          ))}
-        </div>
+          </div>
+        )}
 
         {/* 4-column Product Grid */}
         <div className="store-products-grid">
           {filteredProducts.map((product) => {
-            const isWishlisted = !!wishlist[product.id]
+            const isWishlisted = isProductSaved(product.id)
             const isJustAdded = !!addedAnimation[product.id]
             const stockCount = product.stockCount !== undefined ? product.stockCount : (product.inStock ? 15 : 0)
             const isOut = stockCount === 0 || !product.inStock
@@ -105,7 +128,7 @@ export default function StoreProducts({
                     className={`wishlist-heart-btn ${isWishlisted ? 'liked' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      toggleWishlist(product.id)
+                      toggleWishlist(product)
                     }}
                     aria-label={`Save ${product.name} to wishlist`}
                   >

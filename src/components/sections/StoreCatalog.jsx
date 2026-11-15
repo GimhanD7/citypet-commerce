@@ -37,6 +37,8 @@ export default function StoreCatalog({
   onAddToCart,
   onNavigate,
   onSelectProduct,
+  savedItems = [],
+  onToggleWishlist,
 }) {
   const [productsList, setProductsList] = useState([])
   const [loading, setLoading] = useState(false)
@@ -114,16 +116,96 @@ export default function StoreCatalog({
   // Show more brands toggle
   const [showMoreBrands, setShowMoreBrands] = useState(false)
 
+  // Dynamic Availability counts
+  const inStockCount = useMemo(() => {
+    return productsList.filter((p) => p.inStock).length
+  }, [productsList])
+
+  const outOfStockCount = useMemo(() => {
+    return productsList.filter((p) => !p.inStock).length
+  }, [productsList])
+
+  // Helper to normalize petType and category values across variations
+  const getProductPetType = (p) => {
+    const val = String(p?.petType || p?.pet_type || '').toLowerCase().trim()
+    if (val === 'dog' || val === 'dogs') return 'dogs'
+    if (val === 'cat' || val === 'cats') return 'cats'
+    if (val === 'small-pet' || val === 'small-pets' || val === 'small pets') return 'small-pets'
+    if (val === 'bird' || val === 'birds') return 'birds'
+    if (val === 'fish') return 'fish'
+    return val
+  }
+
+  const getProductCategory = (p) => {
+    const val = String(p?.category || p?.category_id || '').toLowerCase().trim()
+    if (val === 'food') return 'food'
+    if (val === 'treat' || val === 'treats') return 'treats'
+    if (val === 'grooming') return 'grooming'
+    if (val === 'accessory' || val === 'accessories') return 'accessories'
+    if (val === 'healthcare' || val === 'health') return 'healthcare'
+    if (val === 'toy' || val === 'toys') return 'toys'
+    return val
+  }
+
+  // Dynamic counts for pet types, categories, and brands
+  const petTypeCounts = useMemo(() => {
+    const counts = {}
+    productsList.forEach((p) => {
+      const pt = getProductPetType(p)
+      if (pt) counts[pt] = (counts[pt] || 0) + 1
+    })
+    return counts
+  }, [productsList])
+
+  const categoryCounts = useMemo(() => {
+    const counts = {}
+    productsList.forEach((p) => {
+      const cat = getProductCategory(p)
+      if (cat) counts[cat] = (counts[cat] || 0) + 1
+    })
+    return counts
+  }, [productsList])
+
+  const brandCounts = useMemo(() => {
+    const counts = {}
+    productsList.forEach((p) => {
+      if (p.brand) counts[p.brand] = (counts[p.brand] || 0) + 1
+    })
+    return counts
+  }, [productsList])
+
+  const availableBrands = useMemo(() => {
+    const brandMap = new Map()
+    filterBrands.forEach((b) => brandMap.set(b.id, { ...b, count: brandCounts[b.id] || 0 }))
+    productsList.forEach((p) => {
+      if (p.brand && !brandMap.has(p.brand)) {
+        brandMap.set(p.brand, { id: p.brand, name: p.brand, count: brandCounts[p.brand] || 1 })
+      }
+    })
+    return Array.from(brandMap.values())
+  }, [productsList, brandCounts])
+
   // Wishlist & Add to cart animation tracking
-  const [wishlist, setWishlist] = useState({})
+  const [localWishlist, setLocalWishlist] = useState({})
   const [addedAnimation, setAddedAnimation] = useState({})
+
+  const isProductSaved = (id) => {
+    if (savedItems && savedItems.length > 0) {
+      return savedItems.some((item) => (item.id || item) === id)
+    }
+    return !!localWishlist[id]
+  }
 
   const toggleSection = (section) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }))
   }
 
-  const toggleWishlist = (id) => {
-    setWishlist((prev) => ({ ...prev, [id]: !prev[id] }))
+  const toggleWishlist = (product) => {
+    if (onToggleWishlist) {
+      onToggleWishlist(product)
+    } else {
+      setLocalWishlist((prev) => ({ ...prev, [product.id]: !prev[product.id] }))
+    }
   }
 
   const handleAddToCart = (product) => {
@@ -171,12 +253,12 @@ export default function StoreCatalog({
 
     // Pet Type filter
     if (selectedPetTypes.length > 0) {
-      list = list.filter((p) => selectedPetTypes.includes(p.petType))
+      list = list.filter((p) => selectedPetTypes.includes(getProductPetType(p)))
     }
 
     // Category filter
     if (selectedCategories.length > 0) {
-      list = list.filter((p) => selectedCategories.includes(p.category))
+      list = list.filter((p) => selectedCategories.includes(getProductCategory(p)))
     }
 
     // Brand filter
@@ -239,7 +321,7 @@ export default function StoreCatalog({
     sortBy,
   ])
 
-  const visibleBrands = showMoreBrands ? filterBrands : filterBrands.slice(0, 5)
+  const visibleBrands = showMoreBrands ? availableBrands : availableBrands.slice(0, 5)
 
   const activeFiltersCount =
     selectedPetTypes.length +
@@ -250,6 +332,14 @@ export default function StoreCatalog({
 
   return (
     <div className="catalog-page">
+      {/* Mobile Backdrop Overlay */}
+      {mobileFiltersOpen && (
+        <div
+          className="catalog-mobile-overlay"
+          onClick={() => setMobileFiltersOpen(false)}
+        />
+      )}
+
       <div className="container catalog-container">
         {/* Breadcrumbs */}
         <nav className="catalog-breadcrumbs" aria-label="Breadcrumb">
@@ -328,14 +418,6 @@ export default function StoreCatalog({
 
         {/* Main 2-Column Catalog Layout */}
         <div className="catalog-main-layout">
-          {/* Mobile Overlay */}
-          {mobileFiltersOpen && (
-            <div
-              className="catalog-mobile-overlay"
-              onClick={() => setMobileFiltersOpen(false)}
-            />
-          )}
-
           {/* ========================================================
               LEFT COLUMN: Filter Products Sidebar
              ======================================================== */}
@@ -379,7 +461,7 @@ export default function StoreCatalog({
                         />
                         <span className="custom-checkbox" />
                         <span className="filter-label-text">
-                          {pt.name} <span className="filter-item-count">({pt.count})</span>
+                          {pt.name} <span className="filter-item-count">({petTypeCounts[pt.id] || 0})</span>
                         </span>
                       </label>
                     )
@@ -410,7 +492,7 @@ export default function StoreCatalog({
                         />
                         <span className="custom-checkbox" />
                         <span className="filter-label-text">
-                          {cat.name} <span className="filter-item-count">({cat.count})</span>
+                          {cat.name} <span className="filter-item-count">({categoryCounts[cat.id] || 0})</span>
                         </span>
                       </label>
                     )
@@ -441,7 +523,7 @@ export default function StoreCatalog({
                         />
                         <span className="custom-checkbox" />
                         <span className="filter-label-text">
-                          {b.name} <span className="filter-item-count">({b.count})</span>
+                          {b.name} <span className="filter-item-count">({brandCounts[b.id] || b.count || 0})</span>
                         </span>
                       </label>
                     )
@@ -534,7 +616,7 @@ export default function StoreCatalog({
                     />
                     <span className="custom-checkbox" />
                     <span className="filter-label-text">
-                      In Stock <span className="filter-item-count">(132)</span>
+                      In Stock <span className="filter-item-count">({inStockCount})</span>
                     </span>
                   </label>
                   <label className="filter-checkbox-row">
@@ -545,7 +627,7 @@ export default function StoreCatalog({
                     />
                     <span className="custom-checkbox" />
                     <span className="filter-label-text">
-                      Out of Stock <span className="filter-item-count">(6)</span>
+                      Out of Stock <span className="filter-item-count">({outOfStockCount})</span>
                     </span>
                   </label>
                 </div>
@@ -656,7 +738,9 @@ export default function StoreCatalog({
             {/* Results Count & View Toggle */}
             <div className="catalog-results-bar">
               <span className="catalog-count-text">
-                Showing 1 – {Math.min(filteredProducts.length, 8)} of {filteredProducts.length} products
+                {filteredProducts.length === 0
+                  ? 'Showing 0 products'
+                  : `Showing 1 – ${filteredProducts.length} of ${filteredProducts.length} products`}
               </span>
 
               <div className="catalog-view-switcher">
@@ -685,14 +769,18 @@ export default function StoreCatalog({
                 </div>
                 <h3>No products match your filters</h3>
                 <p>Try resetting some filters or searching for something else.</p>
-                <button className="button button-primary" onClick={clearAllFilters}>
+                <button
+                  type="button"
+                  className="button primary catalog-reset-btn"
+                  onClick={clearAllFilters}
+                >
                   <RotateCcw size={16} /> Reset All Filters
                 </button>
               </div>
             ) : (
               <div className={`catalog-products-${viewMode}`}>
                 {filteredProducts.map((product) => {
-                  const isWishlisted = !!wishlist[product.id]
+                  const isWishlisted = isProductSaved(product.id)
                   const isJustAdded = !!addedAnimation[product.id]
                   const stockCount = product.stockCount !== undefined ? product.stockCount : (product.inStock ? 15 : 0)
                   const isLow = stockCount > 0 && stockCount <= 5
@@ -727,7 +815,7 @@ export default function StoreCatalog({
                           className={`catalog-wishlist-btn ${isWishlisted ? 'liked' : ''}`}
                           onClick={(e) => {
                             e.stopPropagation()
-                            toggleWishlist(product.id)
+                            toggleWishlist(product)
                           }}
                           aria-label={`Save ${product.name} to wishlist`}
                         >

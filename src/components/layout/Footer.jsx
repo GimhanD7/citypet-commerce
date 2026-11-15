@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ArrowRight, Check } from 'lucide-react'
 import Brand from '../common/Brand'
+import satTechLogo from '../../assets/sat-tech-logo.jpg'
 
 function FacebookIcon(props) {
   return (
@@ -189,25 +190,19 @@ export default function Footer({ onNavigate, authUser }) {
         <span>© {new Date().getFullYear()} City Pet Animal Hospital. All rights reserved.</span>
         <div className="footer-bottom-links">
           <a
-            href="#account"
-            className="admin-portal-footer-link"
-            onClick={(e) => {
-              e.preventDefault()
-              onNavigate && onNavigate('account')
-            }}
+            href="https://www.facebook.com/profile.php?id=61587040271390"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="powered-by-sattech-link"
+            aria-label="Powered by SaT Tech Consulting"
           >
-            {authUser?.role === 'user' ? `My Account (${authUser.name})` : 'Pet Parent Portal'}
-          </a>
-          <span className="footer-dot">•</span>
-          <a
-            href="#admin"
-            className="admin-portal-footer-link"
-            onClick={(e) => {
-              e.preventDefault()
-              onNavigate && onNavigate('admin')
-            }}
-          >
-            {authUser?.role === 'admin' ? `Admin Dashboard (${authUser.name})` : 'Admin & Staff Portal'}
+            <span className="powered-by-text">Powered by</span>
+            <img
+              src={satTechLogo}
+              alt="SaT Tech Consulting"
+              className="powered-by-sattech-logo"
+            />
+            <span className="powered-by-brand">SaT Tech Consulting</span>
           </a>
         </div>
       </div>

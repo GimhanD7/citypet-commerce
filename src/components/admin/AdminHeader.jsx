@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../config/media'
 import React from 'react'
 import {
   AlertCircle,
@@ -35,7 +36,32 @@ export default function AdminHeader({
   setActiveTab,
   onNavigate,
   onLogout,
+  authUser,
 }) {
+  const displayName = authUser?.name || 'Dr. Sugandhika Gothami'
+  const displayEmail = authUser?.email || 'director@citypet.lk'
+  const initials = (
+    displayName
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part?.[0] || '')
+      .join('') || 'CP'
+  ).toUpperCase()
+  const roleFormatMap = {
+    admin: 'Administrator',
+    super_admin: 'Super Administrator',
+    veterinary_surgeon: 'Veterinary Surgeon',
+    doctor: 'Veterinary Doctor',
+    pharmacist: 'Hospital Pharmacist',
+    receptionist_cashier: 'Receptionist & Cashier',
+    store_manager: 'Store Manager',
+    audit_compliance: 'Audit & Compliance Officer',
+    nurse_technician: 'Veterinary Nurse',
+    staff: 'Hospital Staff',
+    user: 'Pet Parent (Customer)',
+  }
+  const displayRole = roleFormatMap[authUser?.role] || authUser?.role || 'Administrator'
   return (
     <header className="admin-top-appbar">
       {/* Left: Mobile Toggle & Hospital Brand */}
@@ -63,7 +89,7 @@ export default function AdminHeader({
         <input
           type="text"
           className="admin-search-field"
-          placeholder="Search orders, users, products, pets..."
+          placeholder="Search orders, users, products..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -181,14 +207,33 @@ export default function AdminHeader({
             className="admin-profile-pill"
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
           >
-            <img
-              src={doctorAvatar}
-              alt="Dr. Anjali Silva"
-              className="admin-avatar-img"
-            />
+            {mediaUrl(authUser?.avatar) ? (
+              <img src={mediaUrl(authUser.avatar)} alt={displayName} className="admin-avatar-img" />
+            ) : authUser?.email === 'director@citypet.lk' ? (
+              <img src={doctorAvatar} alt={displayName} className="admin-avatar-img" />
+            ) : (
+              <div
+                className="admin-avatar-initials"
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #0e5d59 0%, #04959d 100%)',
+                  color: '#ffffff',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  boxShadow: '0 2px 6px rgba(4, 149, 157, 0.25)',
+                  flexShrink: 0,
+                }}
+              >
+                {initials}
+              </div>
+            )}
             <div className="admin-user-texts">
-              <strong className="user-name">Dr. Anjali Silva</strong>
-              <span className="user-role">Administrator</span>
+              <strong className="user-name">{displayName}</strong>
+              <span className="user-role">{displayRole}</span>
             </div>
             <ChevronDown size={14} className="profile-chevron" />
           </button>
@@ -196,8 +241,8 @@ export default function AdminHeader({
           {isProfileMenuOpen && (
             <div className="profile-dropdown-menu">
               <div className="profile-info-header">
-                <strong>Dr. Anjali Silva</strong>
-                <span>director@citypet.lk</span>
+                <strong>{displayName}</strong>
+                <span>{displayEmail}</span>
               </div>
               <div className="profile-menu-links">
                 <button

@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../config/media'
 import React, { useState, useEffect, useRef } from 'react'
 import {
   AlertCircle,
@@ -178,11 +179,9 @@ export default function CheckoutPage({
   }
 
   // Delivery & Payment Method selections
-  const [deliveryMethod, setDeliveryMethod] = useState('standard') // 'standard' | 'express'
-  const [deliveryOptions, setDeliveryOptions] = useState([
-    { id: 'standard', name: 'Standard Delivery', time: '2 - 4 working days', price: 350, fee: 350, enabled: true, icon: Truck },
-    { id: 'express', name: 'Express Delivery', time: '1 - 2 working days', price: 700, fee: 700, enabled: true, icon: Truck },
-  ])
+  const deliveryMethod = 'standard'
+  const [delivery, setDelivery] = useState(null)
+  const [deliveryError, setDeliveryError] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('card') // 'card' (PayHere) | 'bank'
   const [discountCode, setDiscountCode] = useState('')
   const [discountAmount, setDiscountAmount] = useState(0)
@@ -219,37 +218,22 @@ export default function CheckoutPage({
   useEffect(() => {
     let mounted = true
     orderService.getDeliverySettings()
-      .then((methods) => {
-        if (!mounted || !Array.isArray(methods) || methods.length === 0) return
-        const enabledMethods = methods
-          .filter((method) => method.enabled !== false)
-          .map((method) => ({
-            ...method,
-            price: Number(method.price ?? method.fee ?? 0),
-            fee: Number(method.fee ?? method.price ?? 0),
-            icon: Truck,
-          }))
-        if (enabledMethods.length === 0) return
-        setDeliveryOptions(enabledMethods)
-        if (!enabledMethods.some((method) => method.id === deliveryMethod)) {
-          setDeliveryMethod(enabledMethods[0].id)
-        }
+      .then(([method]) => {
+        if (!mounted) return
+        if (!method) throw new Error('Standard Delivery is unavailable.')
+        setDelivery(method)
       })
-      .catch((err) => console.warn('Failed to load delivery settings:', err))
-    return () => {
-      mounted = false
-    }
-  }, [deliveryMethod])
-
-  // Delivery fee calculation
-  const selectedDeliveryOption = deliveryOptions.find((method) => method.id === deliveryMethod) || deliveryOptions[0]
-  const deliveryFee = Number(selectedDeliveryOption?.fee ?? selectedDeliveryOption?.price ?? 0)
+      .catch((error) => { if (mounted) setDeliveryError(error.message) })
+    return () => { mounted = false }
+  }, [])
 
   // Subtotal calculation
   const subtotal = cartItems.reduce(
     (acc, item) => acc + (item.product.price || 0) * item.quantity,
     0
   )
+
+  const deliveryFee = delivery && Math.round(subtotal * 100) / 100 < delivery.freeDeliveryThreshold ? delivery.fee : 0
 
   // Total calculation
   const total = Math.max(0, subtotal - (discountApplied ? discountAmount : 0) + deliveryFee)
@@ -322,33 +306,17 @@ export default function CheckoutPage({
     setFormErrors((prev) => ({ ...prev, paymentSlip: undefined }))
     setIsUploadingSlip(true)
 
-    // Generate local preview immediately
-    const isPdf = file.type === 'application/pdf'
-    let localPreviewUrl = ''
-    if (!isPdf) {
-      localPreviewUrl = URL.createObjectURL(file)
-    }
-
     try {
       const res = await orderService.uploadPaymentSlip(file)
+      if (!res?.url) throw new Error('The server did not return a saved receipt.')
       setUploadedSlip({
-        file,
-        url: res.url || localPreviewUrl,
+        url: res.url,
         filename: file.name,
         size: (file.size / 1024).toFixed(1) + ' KB',
-        type: isPdf ? 'pdf' : 'image',
-        preview: localPreviewUrl,
+        type: res.type,
       })
-    } catch (err) {
-      console.warn('Direct upload error, falling back to local slip preview:', err)
-      setUploadedSlip({
-        file,
-        url: localPreviewUrl,
-        filename: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        type: isPdf ? 'pdf' : 'image',
-        preview: localPreviewUrl,
-      })
+    } catch (error) {
+      setFormErrors((previous) => ({ ...previous, paymentSlip: error.message || 'Unable to upload the receipt.' }))
     } finally {
       setIsUploadingSlip(false)
     }
@@ -356,20 +324,18 @@ export default function CheckoutPage({
 
   const handleSlipFileSelect = (e) => {
     const file = e.target.files?.[0]
-    if (file) processSlipFile(file)
+    e.target.value = ''
+    if (file && !isUploadingSlip) processSlipFile(file)
   }
 
   const handleSlipDrop = (e) => {
     e.preventDefault()
     setIsDraggingSlip(false)
     const file = e.dataTransfer?.files?.[0]
-    if (file) processSlipFile(file)
+    if (file && !isUploadingSlip) processSlipFile(file)
   }
 
   const handleRemoveSlip = () => {
-    if (uploadedSlip?.preview) {
-      URL.revokeObjectURL(uploadedSlip.preview)
-    }
     setUploadedSlip(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -557,7 +523,7 @@ export default function CheckoutPage({
         subtotal: subtotal,
         discountAmount: discountApplied ? discountAmount : 0,
         deliveryFee: deliveryFee,
-        total: total,
+        total: res.total,
         deliveryMethod,
         paymentMethod,
         paymentSlip: uploadedSlip?.url || null,
@@ -631,7 +597,7 @@ export default function CheckoutPage({
 
   // Main Submit Handler
   const handlePlaceOrder = async () => {
-    if (hasOutOfStockItems || cartItems.length === 0) {
+    if (!delivery || isPlacingOrder || hasOutOfStockItems || cartItems.length === 0) {
       return
     }
 
@@ -642,6 +608,23 @@ export default function CheckoutPage({
     // 1. Validate All Customer Address Fields
     const isValid = validateCustomerFields()
     if (!isValid) return
+
+    setIsPlacingOrder(true)
+    setDeliveryError('')
+    try {
+      const [latest] = await orderService.getDeliverySettings()
+      if (!latest) throw new Error('Standard Delivery is unavailable.')
+      if (latest.fee !== delivery.fee || latest.freeDeliveryThreshold !== delivery.freeDeliveryThreshold) {
+        setDelivery(latest)
+        setDeliveryError('Delivery rates changed. Review your updated total before placing the order.')
+        setIsPlacingOrder(false)
+        return
+      }
+    } catch (error) {
+      setDeliveryError(error.message || 'Unable to confirm the delivery rate. Please try again.')
+      setIsPlacingOrder(false)
+      return
+    }
 
     // 2. Branch by Payment Method
     if (paymentMethod === 'card') {
@@ -1025,7 +1008,7 @@ export default function CheckoutPage({
                   <div className="success-slip-preview-row">
                     <span className="slip-preview-label">Attached Slip:</span>
                     <a
-                      href={orderPlacedData.paymentSlip}
+                      href={mediaUrl(orderPlacedData.paymentSlip)}
                       target="_blank"
                       rel="noreferrer"
                       className="slip-preview-link"
@@ -1343,29 +1326,18 @@ export default function CheckoutPage({
                   </div>
                 </div>
 
+                {delivery && deliveryError && <p className="checkout-field-error" role="alert">{deliveryError}</p>}
                 <div className="delivery-methods-grid">
-                  {deliveryOptions.length === 0 ? (
-                    <div className="checkout-field-error">
-                      Delivery is temporarily unavailable. Please contact City Pet before placing this order.
+                  {delivery ? (
+                    <div className="method-select-card active">
+                      <div className="method-icon-wrap"><Truck size={24} /></div>
+                      <strong className="method-name">{delivery.name}</strong>
+                      <span className="method-time">{delivery.time}</span>
+                      <span className="method-price">{deliveryFee ? "LKR " + deliveryFee.toLocaleString() : "Free"}</span>
                     </div>
-                  ) : deliveryOptions.map((opt) => {
-                    const Icon = opt.icon
-                    const isSelected = deliveryMethod === opt.id
-                    return (
-                      <div
-                        key={opt.id}
-                        className={`method-select-card ${isSelected ? 'active' : ''}`}
-                        onClick={() => setDeliveryMethod(opt.id)}
-                      >
-                        <div className="method-icon-wrap">
-                          <Icon size={24} />
-                        </div>
-                        <strong className="method-name">{opt.name}</strong>
-                        <span className="method-time">{opt.time}</span>
-                        <span className="method-price">LKR {Number(opt.price ?? opt.fee ?? 0).toLocaleString()}</span>
-                      </div>
-                    )
-                  })}
+                  ) : (
+                    <p role={deliveryError ? "alert" : "status"}>{deliveryError || "Loading delivery rates…"}</p>
+                  )}
                 </div>
               </section>
 
@@ -1551,7 +1523,7 @@ export default function CheckoutPage({
                               </div>
                             ) : (
                               <img
-                                src={uploadedSlip.preview || uploadedSlip.url}
+                                src={mediaUrl(uploadedSlip.url)}
                                 alt="Payment slip preview"
                                 className="slip-thumb-img"
                               />
@@ -1573,7 +1545,7 @@ export default function CheckoutPage({
                           <div className="uploaded-slip-actions">
                             {uploadedSlip.url && (
                               <a
-                                href={uploadedSlip.url}
+                                href={mediaUrl(uploadedSlip.url)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="slip-action-btn view-btn"
@@ -1759,8 +1731,8 @@ export default function CheckoutPage({
                   )}
 
                   <div className="breakdown-row">
-                    <span>Delivery Charge ({deliveryMethod === 'standard' ? 'Standard' : 'Express'})</span>
-                    <strong>LKR {deliveryFee.toLocaleString()}</strong>
+                    <span>Standard Delivery</span>
+                    <strong>{delivery ? (deliveryFee ? "LKR " + deliveryFee.toLocaleString() : "Free") : "—"}</strong>
                   </div>
 
                   <div className="breakdown-total-row">
@@ -1806,7 +1778,7 @@ export default function CheckoutPage({
                   type="button"
                   className={`place-order-main-btn ${hasOutOfStockItems ? 'disabled' : ''}`}
                   onClick={handlePlaceOrder}
-                  disabled={isPlacingOrder || cartItems.length === 0 || hasOutOfStockItems}
+                  disabled={!delivery || isUploadingSlip || isPlacingOrder || cartItems.length === 0 || hasOutOfStockItems}
                 >
                   <Lock size={16} />
                   <span>

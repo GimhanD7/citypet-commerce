@@ -226,35 +226,21 @@ export const orderService = {
    * Admin: Get All Orders
    */
   async getAllOrders(status = '') {
-    try {
-      const qs = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : ''
-      const res = await apiFetch(`orders.php${qs}`)
-      return res.orders || (Array.isArray(res) ? res : [])
-    } catch (err) {
-      console.warn('[orderService.getAllOrders] Error loading orders:', err.message)
-      return []
-    }
+    const qs = status && status !== 'all' ? '?status=' + encodeURIComponent(status) : ''
+    const res = await apiFetch("orders.php" + qs)
+    return Array.isArray(res) ? res : res?.orders ?? []
   },
 
-  async getDeliverySettings({ includeDisabled = false } = {}) {
-    try {
-      const qs = includeDisabled ? '?all=1' : ''
-      const res = await apiFetch(`delivery_settings.php${qs}`)
-      return res.methods || []
-    } catch (err) {
-      console.warn('[orderService.getDeliverySettings] Error loading delivery settings:', err.message)
-      return [
-        { id: 'standard', name: 'Standard Delivery', time: '2 - 4 working days', fee: 350, price: 350, enabled: true },
-        { id: 'express', name: 'Express Delivery', time: '1 - 2 working days', fee: 700, price: 700, enabled: true },
-      ].filter((method) => includeDisabled || method.enabled)
-    }
+  async getDeliverySettings() {
+    const response = await apiFetch('delivery_settings.php')
+    return response.methods
   },
 
-  async updateDeliverySettings(methods) {
+  async updateDeliverySettings({ fee, freeDeliveryThreshold }) {
     const session = await apiFetch('auth.php?action=session')
     return apiFetch('delivery_settings.php', {
       method: 'PUT',
-      body: { methods, csrfToken: session.csrfToken },
+      body: { fee, freeDeliveryThreshold, csrfToken: session.csrfToken },
     })
   },
 
@@ -269,9 +255,10 @@ export const orderService = {
    * Admin: Update Order Status
    */
   async updateOrderStatus(orderId, status) {
+    const session = await apiFetch('auth.php?action=session')
     return await apiFetch('orders.php', {
       method: 'PUT',
-      body: { orderId, status },
+      body: { orderId, status, csrfToken: session.csrfToken },
     })
   },
 
@@ -286,19 +273,12 @@ export const orderService = {
   /**
    * Upload Bank Transfer Payment Slip
    */
-  async uploadPaymentSlip(fileOrBase64) {
-    if (fileOrBase64 instanceof File) {
-      const fd = new FormData()
-      fd.append('slip', fileOrBase64)
-      return await apiFetch('upload_slip.php', {
-        method: 'POST',
-        body: fd,
-      })
-    }
-    return await apiFetch('upload_slip.php', {
-      method: 'POST',
-      body: { base64Data: fileOrBase64 },
-    })
+  async uploadPaymentSlip(file) {
+    const session = await apiFetch('auth.php?action=session')
+    const body = new FormData()
+    body.append('slip', file)
+    body.append('csrfToken', session.csrfToken)
+    return apiFetch('upload_slip.php', { method: 'POST', body, timeout: 60000 })
   },
 
   /**
@@ -313,9 +293,66 @@ export const orderService = {
 }
 
 /* ============================================================
+   4.1 SMS NOTIFICATIONS SERVICE (Admin & Customer Updates)
+   ============================================================ */
+export const smsService = {
+  /**
+   * Send SMS notification
+   */
+  async sendSms({ orderId, orderNumber, phone, customerName, message, templateType }) {
+    const session = await apiFetch('auth.php?action=session')
+    return await apiFetch('sms.php', {
+      method: 'POST',
+      body: {
+        orderId,
+        orderNumber,
+        phone,
+        recipientName: customerName,
+        message,
+        templateType,
+        csrfToken: session?.csrfToken,
+      },
+    })
+  },
+
+  /**
+   * Get SMS logs for an order
+   */
+  async getOrderSmsLogs(orderId) {
+    try {
+      const res = await apiFetch(`sms.php?order_id=${encodeURIComponent(orderId)}`)
+      return res.logs || (Array.isArray(res) ? res : [])
+    } catch (err) {
+      console.warn('[smsService.getOrderSmsLogs] Error loading logs:', err.message)
+      return []
+    }
+  },
+
+  /**
+   * Get all SMS logs for admin audit
+   */
+  async getAllSmsLogs(limit = 100) {
+    try {
+      const res = await apiFetch(`sms.php?all=1&limit=${limit}`)
+      return res.logs || (Array.isArray(res) ? res : [])
+    } catch (err) {
+      console.warn('[smsService.getAllSmsLogs] Error loading all logs:', err.message)
+      return []
+    }
+  },
+}
+
+/* ============================================================
    5. CUSTOMER PROFILE SERVICE
    ============================================================ */
 export const profileService = {
+  async uploadImage(file) {
+    const session = await apiFetch('auth.php?action=session')
+    const body = new FormData()
+    body.append('avatar', file)
+    body.append('csrfToken', session.csrfToken)
+    return apiFetch('upload_profile_image.php', { method: 'POST', body, timeout: 60000 })
+  },
   async getProfile(userId = '') {
     if (!userId) return null
     try {
@@ -467,5 +504,59 @@ export const activityService = {
       console.warn('[activityService.getActivityLogs] Error loading activity logs:', err.message)
       return []
     }
+  },
+}
+
+/* ============================================================
+   7. ROLES & PERMISSIONS SERVICE
+   ============================================================ */
+export const roleService = {
+  async getRoles() {
+    return apiFetch('admin/roles.php')
+  },
+  async createRole({ id, name, description, badgeColor, permissions }) {
+    const data = await apiFetch('admin/roles.php')
+    return apiFetch('admin/roles.php', {
+      method: 'POST',
+      body: { id, name, description, badgeColor, permissions, csrfToken: data?.csrfToken || '' },
+    })
+  },
+  async updateRole({ id, name, description, badgeColor, permissions }) {
+    const data = await apiFetch('admin/roles.php')
+    return apiFetch('admin/roles.php', {
+      method: 'PUT',
+      body: { id, name, description, badgeColor, permissions, csrfToken: data?.csrfToken || '' },
+    })
+  },
+  async deleteRole(id) {
+    return apiFetch(`admin/roles.php?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
+/* ============================================================
+   8. SYSTEM USERS MANAGEMENT SERVICE
+   ============================================================ */
+export const userService = {
+  async getUsers() {
+    return apiFetch('admin/users.php')
+  },
+  async createUser(userData) {
+    return apiFetch('admin/users.php', {
+      method: 'POST',
+      body: userData,
+    })
+  },
+  async updateUser(userData) {
+    return apiFetch('admin/users.php', {
+      method: 'PUT',
+      body: userData,
+    })
+  },
+  async deleteUser(userId) {
+    return apiFetch(`admin/users.php?id=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    })
   },
 }

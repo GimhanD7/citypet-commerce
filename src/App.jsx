@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
 import Hero from './components/sections/Hero'
@@ -77,11 +77,10 @@ function App() {
   const [catalogFilters, setCatalogFilters] = useState({ category: 'all', petType: 'all' })
   const [cartItems, setCartItems] = useState(() => {
     try {
-      localStorage.removeItem('citypet_activity_logs')
       const savedCart = localStorage.getItem('citypet_cart')
       if (savedCart) {
         const parsed = JSON.parse(savedCart)
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.filter((item) => item?.product?.id)
         }
       }
@@ -91,7 +90,21 @@ function App() {
     return []
   })
 
-  // Persist session and cart
+  // Persistent Saved Items / Wishlist State across sessions & users
+  const [savedItems, setSavedItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('citypet_saved_items') || localStorage.getItem('citypet_wishlist')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) return parsed
+      }
+    } catch {
+      // ignore
+    }
+    return []
+  })
+
+  // Persist session, cart and wishlist
   useEffect(() => {
     try {
       if (authUser) {
@@ -107,10 +120,73 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('citypet_cart', JSON.stringify(cartItems))
+      if (authUser?.id || authUser?.email) {
+        localStorage.setItem(`citypet_cart_${authUser.id || authUser.email}`, JSON.stringify(cartItems))
+      }
     } catch {
       // ignore
     }
-  }, [cartItems])
+  }, [cartItems, authUser])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('citypet_saved_items', JSON.stringify(savedItems))
+      localStorage.setItem('citypet_wishlist', JSON.stringify(savedItems))
+      if (authUser?.id || authUser?.email) {
+        localStorage.setItem(`citypet_saved_items_${authUser.id || authUser.email}`, JSON.stringify(savedItems))
+      }
+    } catch {
+      // ignore
+    }
+  }, [savedItems, authUser])
+
+  // When user logs in, restore/merge their saved cart and wishlist
+  useEffect(() => {
+    if (!authUser) return
+    const userKey = `citypet_cart_${authUser.id || authUser.email}`
+    const savedUserCart = localStorage.getItem(userKey)
+    if (savedUserCart) {
+      try {
+        const parsed = JSON.parse(savedUserCart)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCartItems((currentCart) => {
+            const map = new Map()
+            currentCart.forEach((item) => map.set(cartItemKey(item.product), item))
+            parsed.forEach((item) => {
+              if (!item?.product?.id) return
+              const k = cartItemKey(item.product)
+              if (map.has(k)) {
+                map.set(k, { ...item, quantity: Math.max(item.quantity, map.get(k).quantity) })
+              } else {
+                map.set(k, item)
+              }
+            })
+            return Array.from(map.values())
+          })
+        }
+      } catch { /* ignore */ }
+    }
+
+    const savedUserWishlist = localStorage.getItem(`citypet_saved_items_${authUser.id || authUser.email}`)
+    if (savedUserWishlist) {
+      try {
+        const parsedW = JSON.parse(savedUserWishlist)
+        if (Array.isArray(parsedW) && parsedW.length > 0) {
+          setSavedItems((currentSaved) => {
+            const ids = new Set(currentSaved.map((p) => p.id))
+            const merged = [...currentSaved]
+            parsedW.forEach((p) => {
+              if (p?.id && !ids.has(p.id)) {
+                ids.add(p.id)
+                merged.push(p)
+              }
+            })
+            return merged
+          })
+        }
+      } catch { /* ignore */ }
+    }
+  }, [authUser])
 
   // Sync selectedProduct and cartItems when an item is restocked or updated in Admin
   useEffect(() => {
@@ -120,13 +196,12 @@ function App() {
       try {
         const res = await apiFetch('products.php')
         const liveList = res?.products || (Array.isArray(res) ? res : [])
-        if (!mounted) return
+        if (!mounted || !liveList || liveList.length === 0) return
 
         setCartItems((prevCart) => {
-          const liveIds = new Set(liveList.map((p) => p.id))
-          const filtered = prevCart.filter((item) => item?.product?.id && liveIds.has(item.product.id))
-          let modified = filtered.length !== prevCart.length
-          const refreshed = filtered.map((item) => {
+          let modified = false
+          const refreshed = prevCart.map((item) => {
+            if (!item?.product?.id) return item
             const live = liveList.find((p) => p.id === item.product.id)
             if (live) {
               const liveCount = live.stockCount !== undefined ? Number(live.stockCount) : (live.inStock ? 15 : 0)
@@ -152,8 +227,8 @@ function App() {
           })
           return modified ? refreshed : prevCart
         })
-      } catch (err) {
-        // network/offline fallback
+      } catch {
+        // network/offline fallback — cart is safely preserved!
       }
     }
 
@@ -205,20 +280,59 @@ function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
+
+  // Keep a synchronous ref of authUser to avoid stale closure issues in event listeners
+  const authUserRef = React.useRef(authUser)
+  useEffect(() => {
+    authUserRef.current = authUser
+  }, [authUser])
+
+  // Helper: check if role has hospital administrative or clinical staff privileges
+  const isStaffOrAdmin = (role) => {
+    if (!role) return false
+    const r = String(role).toLowerCase().trim()
+    return (
+      r === 'admin' ||
+      r === 'super_admin' ||
+      r === 'veterinary_surgeon' ||
+      r === 'doctor' ||
+      r === 'pharmacist' ||
+      r === 'receptionist_cashier' ||
+      r === 'store_manager' ||
+      r === 'audit_compliance' ||
+      r === 'nurse_technician' ||
+      r === 'staff'
+    )
+  }
 
   // Handle hash changes if user navigates with direct URL anchors
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash
       const path = window.location.pathname
+      const currentUser = authUserRef.current
+
       if (hash === '#admin' || hash === '#portal' || path.endsWith('/admin')) {
-        if (authUser?.role === 'admin') {
+        if (currentUser && isStaffOrAdmin(currentUser.role)) {
           setActiveView('admin')
+          setIsLoginModalOpen(false)
         } else {
-          setActiveView('login')
+          setIsLoginModalOpen(true)
         }
       } else if (hash === '#login' || hash === '#signin' || hash === '#auth') {
-        setActiveView('login')
+        if (currentUser) {
+          if (isStaffOrAdmin(currentUser.role)) {
+            setActiveView('admin')
+            window.location.hash = '#admin'
+          } else {
+            setActiveView('account')
+            window.location.hash = '#account'
+          }
+          setIsLoginModalOpen(false)
+        } else {
+          setIsLoginModalOpen(true)
+        }
       } else if (hash === '#store' || hash === '#store-page') {
         setActiveView('store')
       } else if (hash === '#catalog' || hash === '#shop') {
@@ -244,12 +358,15 @@ function App() {
           })
         }
       } else if (hash === '#account' || hash === '#profile' || hash === '#dashboard') {
-        if (authUser?.role === 'user') {
-          setActiveView('account')
-        } else if (authUser?.role === 'admin') {
+        if (!currentUser) {
+          setIsLoginModalOpen(true)
+        } else if (isStaffOrAdmin(currentUser.role)) {
           setActiveView('admin')
+          window.location.hash = '#admin'
+          setIsLoginModalOpen(false)
         } else {
-          setActiveView('login')
+          setActiveView('account')
+          setIsLoginModalOpen(false)
         }
       } else if (hash === '#checkout' || hash === '#order') {
         setActiveView('checkout')
@@ -262,46 +379,127 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHash)
   }, [authUser])
 
-  const handleLoginSuccess = (userData) => {
+  const handleLoginSuccess = (userData, options = {}) => {
+    if (!userData) return
     setSessionError('')
+
+    // 1. Immediately update ref so hash listeners see the logged-in user synchronously
+    authUserRef.current = userData
     setAuthUser(userData)
-    if (userData.role === 'admin') {
+    try {
+      localStorage.setItem('citypet_auth_user', JSON.stringify(userData))
+    } catch { /* ignore */ }
+
+    // 2. MERGE GUEST CART WITH LOGGED IN USER CART ("before login add cart items add the login users cart")
+    const userCartKey = `citypet_cart_${userData.id || userData.email}`
+    let savedUserCart = []
+    try {
+      const stored = localStorage.getItem(userCartKey)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) savedUserCart = parsed
+      }
+    } catch { /* ignore */ }
+
+    // Merge cartItems (items added before login) with savedUserCart
+    const mergedCartMap = new Map()
+    savedUserCart.forEach((item) => {
+      if (item?.product?.id) {
+        mergedCartMap.set(cartItemKey(item.product), item)
+      }
+    })
+    cartItems.forEach((guestItem) => {
+      if (guestItem?.product?.id) {
+        const k = cartItemKey(guestItem.product)
+        if (mergedCartMap.has(k)) {
+          const existing = mergedCartMap.get(k)
+          mergedCartMap.set(k, {
+            ...existing,
+            quantity: Math.max(existing.quantity, guestItem.quantity),
+          })
+        } else {
+          mergedCartMap.set(k, guestItem)
+        }
+      }
+    })
+    const finalCart = Array.from(mergedCartMap.values())
+    setCartItems(finalCart)
+    try {
+      localStorage.setItem('citypet_cart', JSON.stringify(finalCart))
+      localStorage.setItem(userCartKey, JSON.stringify(finalCart))
+    } catch { /* ignore */ }
+
+    // 3. MERGE WISHLIST / SAVED ITEMS
+    const userWishlistKey = `citypet_saved_items_${userData.id || userData.email}`
+    let savedUserWishlist = []
+    try {
+      const storedW = localStorage.getItem(userWishlistKey)
+      if (storedW) {
+        const parsedW = JSON.parse(storedW)
+        if (Array.isArray(parsedW)) savedUserWishlist = parsedW
+      }
+    } catch { /* ignore */ }
+
+    const mergedWishlistMap = new Map()
+    savedUserWishlist.forEach((p) => { if (p?.id) mergedWishlistMap.set(p.id, p) })
+    savedItems.forEach((p) => { if (p?.id) mergedWishlistMap.set(p.id, p) })
+    const finalWishlist = Array.from(mergedWishlistMap.values())
+    setSavedItems(finalWishlist)
+    try {
+      localStorage.setItem('citypet_saved_items', JSON.stringify(finalWishlist))
+      localStorage.setItem('citypet_wishlist', JSON.stringify(finalWishlist))
+      localStorage.setItem(userWishlistKey, JSON.stringify(finalWishlist))
+    } catch { /* ignore */ }
+
+    // 4. Close login modal
+    setIsLoginModalOpen(false)
+
+    // 5. ROLE-BASED REDIRECTION ("role base login having some issues solve the issuess")
+    const isStaff = isStaffOrAdmin(userData.role)
+
+    if (isStaff) {
       setActiveView('admin')
       window.location.hash = '#admin'
+    } else if (options.fromCheckout || activeView === 'checkout' || window.location.hash === '#checkout') {
+      setActiveView('checkout')
+      window.location.hash = '#checkout'
     } else {
       setActiveView('account')
       window.location.hash = '#account'
     }
+
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleLogout = () => {
     apiFetch('auth.php?action=logout', { method: 'POST', credentials: 'include' })
       .catch((err) => console.warn('Session logout failed:', err.message))
+    authUserRef.current = null
     setAuthUser(null)
-    setActiveView('login')
-    try { localStorage.removeItem('citypet_admin_tab') } catch { /* ignore */ }
-    window.location.hash = '#login'
+    setActiveView('home')
+    setIsLoginModalOpen(false)
+    try {
+      localStorage.removeItem('citypet_auth_user')
+      localStorage.removeItem('citypet_admin_tab')
+    } catch { /* ignore */ }
+    window.location.hash = ''
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleNavigate = (view, extra) => {
     if (view === 'login') {
-      setActiveView('login')
-      window.location.hash = '#login'
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setIsLoginModalOpen(true)
       return
     }
 
     if (view === 'admin') {
-      if (authUser?.role === 'admin') {
+      if (authUser && isStaffOrAdmin(authUser.role)) {
         setActiveView('admin')
         window.location.hash = '#admin'
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       } else {
-        setActiveView('login')
-        window.location.hash = '#login'
+        setIsLoginModalOpen(true)
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -313,17 +511,17 @@ function App() {
     }
 
     if (view === 'account') {
-      if (authUser?.role === 'user') {
-        setActiveView('account')
-        window.location.hash = '#account'
-      } else if (authUser?.role === 'admin') {
+      if (!authUser) {
+        setIsLoginModalOpen(true)
+      } else if (isStaffOrAdmin(authUser.role)) {
         setActiveView('admin')
         window.location.hash = '#admin'
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       } else {
-        setActiveView('login')
-        window.location.hash = '#login'
+        setActiveView('account')
+        window.location.hash = '#account'
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -442,23 +640,37 @@ function App() {
     setCartItems([])
   }
 
-  const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0)
-
-  // UNIFIED LOGIN VIEW (for both Normal Users and Admins)
-  if (sessionLoading) {
-    return <div className="admin-root-shell"><p role="status">Checking your session…</p></div>
+  const toggleWishlist = (product) => {
+    if (!product || !product.id) return
+    setSavedItems((prev) => {
+      const exists = prev.some((p) => p.id === product.id)
+      if (exists) {
+        return prev.filter((p) => p.id !== product.id)
+      } else {
+        return [{ ...product, savedAt: new Date().toISOString() }, ...prev]
+      }
+    })
   }
 
-  if (activeView === 'login') {
-    return (
-      <div className="admin-root-shell">
-        {sessionError && <p role="alert">{sessionError}</p>}
-        <AdminLogin
-          onNavigate={handleNavigate}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      </div>
-    )
+  const saveForLater = (product) => {
+    if (!product) return
+    removeFromCart(cartItemKey(product))
+    setSavedItems((prev) => {
+      if (prev.some((p) => p.id === product.id)) return prev
+      return [{ ...product, savedAt: new Date().toISOString() }, ...prev]
+    })
+  }
+
+  const moveToCart = (product) => {
+    if (!product) return
+    setSavedItems((prev) => prev.filter((p) => p.id !== product.id))
+    addToCart(product, 1)
+  }
+
+  const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0)
+
+  if (sessionLoading) {
+    return <div className="admin-root-shell"><p role="status">Checking your session…</p></div>
   }
 
   // AUTHENTICATED ADMIN DASHBOARD VIEW
@@ -499,7 +711,7 @@ function App() {
             onNavigate={handleNavigate}
             onOpenCart={() => setIsCartOpen(true)}
             onCheckoutLogin={(user) => {
-              setAuthUser(user)
+              handleLoginSuccess(user, { fromCheckout: true })
             }}
           />
         ) : activeView === 'account' ? (
@@ -510,6 +722,8 @@ function App() {
             onNavigate={handleNavigate}
             onAddToCart={addToCart}
             onSelectProduct={handleSelectProduct}
+            savedItems={savedItems}
+            onToggleWishlist={toggleWishlist}
           />
         ) : activeView === 'product-detail' ? (
           /* Dedicated Product Detail Page */
@@ -521,6 +735,8 @@ function App() {
             onNavigate={handleNavigate}
             onOpenAccount={() => setIsAccountOpen(true)}
             onSelectProduct={handleSelectProduct}
+            savedItems={savedItems}
+            onToggleWishlist={toggleWishlist}
           />
         ) : activeView === 'catalog' ? (
           /* Dedicated Store Catalog / Filter Shop Page */
@@ -530,6 +746,8 @@ function App() {
             onAddToCart={addToCart}
             onNavigate={handleNavigate}
             onSelectProduct={handleSelectProduct}
+            savedItems={savedItems}
+            onToggleWishlist={toggleWishlist}
           />
         ) : activeView === 'store' ? (
           /* Dedicated Store Landing Page */
@@ -537,6 +755,8 @@ function App() {
             onAddToCart={addToCart}
             onNavigateToCatalog={(params) => handleNavigate('catalog', params)}
             onSelectProduct={handleSelectProduct}
+            savedItems={savedItems}
+            onToggleWishlist={toggleWishlist}
           />
         ) : (
           /* Main Hospital Home Page */
@@ -573,6 +793,10 @@ function App() {
           setIsCartOpen(false)
           handleNavigate('checkout')
         }}
+        savedItems={savedItems}
+        onSaveForLater={saveForLater}
+        onMoveToCart={moveToCart}
+        onRemoveSaved={toggleWishlist}
       />
 
       {/* Search Modal */}
@@ -595,6 +819,19 @@ function App() {
         onClose={() => setIsCheckoutOpen(false)}
         cartItems={cartItems}
         onClearCart={clearCart}
+      />
+
+      {/* Unified Sign In / Create Account Popup Modal */}
+      <AdminLogin
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false)
+          if (['#login', '#signin', '#auth', '#admin', '#portal', '#account'].includes(window.location.hash) && !authUser) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search)
+          }
+        }}
+        onNavigate={handleNavigate}
+        onLoginSuccess={handleLoginSuccess}
       />
     </div>
   )

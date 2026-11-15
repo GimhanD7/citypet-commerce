@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../config/media'
 import React, { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Heart, Maximize2, Play, Video, Volume2, X } from 'lucide-react'
 import ProductVisual from '../common/ProductVisual'
@@ -23,7 +24,7 @@ export default function ProductGallery({ product }) {
       }
       return item
     }),
-  ]
+  ].filter(Boolean).map((item) => ({ ...item, url: mediaUrl(item.url) }))
 
   // If no main image or gallery, provide placeholder visual
   const totalSlots = media.length

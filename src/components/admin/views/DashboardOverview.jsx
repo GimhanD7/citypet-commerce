@@ -457,66 +457,6 @@ export default function DashboardOverview({
             </table>
           </div>
         </div>
-
-        {/* Right Card: Registered Pets */}
-        <div className="admin-card-surface">
-          <div className="surface-header-row">
-            <h3 className="surface-title">Registered Customer Pets</h3>
-            <button
-              type="button"
-              className="surface-link-btn"
-              onClick={() => setActiveTab('reports')}
-            >
-              <span>View pet reports</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          <div className="admin-table-responsive">
-            <table className="admin-data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Pet / Owner</th>
-                  <th>Breed / Species</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentPatients.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', padding: '28px', color: '#7aa39e' }}>
-                      No customer pets registered yet.
-                    </td>
-                  </tr>
-                ) : (
-                  recentPatients.map((pat) => (
-                    <tr key={pat.id}>
-                      <td className="td-datetime">
-                        <strong>{pat.date}</strong>
-                      </td>
-                      <td className="td-pet-owner">
-                        <div className="pet-owner-combo">
-                          <div className="pet-owner-texts">
-                            <strong>{pat.petName}</strong>
-                            <small>{pat.ownerName}</small>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="td-service">{pat.petType || pat.service}</td>
-                      <td>
-                        <span className="status-pill success">
-                          <span className="status-dot" />
-                          {pat.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </>
   )

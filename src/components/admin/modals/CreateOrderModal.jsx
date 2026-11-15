@@ -1,79 +1,72 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { X } from 'lucide-react'
+import { orderService } from '../../../services/api'
 
-export default function CreateOrderModal({
-  recentOrders,
-  setRecentOrders,
-  onClose,
-  showToast,
-}) {
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const newId = `#CP${Math.floor(75822 + Math.random() * 50)}`
-    setRecentOrders([
-      {
-        id: newId,
-        date: 'Apr 30, 2024',
-        customer: 'Sunil Wickramasinghe',
-        items: '2 items',
-        total: 'LKR 9,200',
-        status: 'Processing',
-        statusType: 'info',
-      },
-      ...recentOrders,
-    ])
-    onClose()
-    showToast(`Order ${newId} created successfully!`)
+export default function CreateOrderModal({ products, onClose, onCreated }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const available = products.filter((product) => product.inStock && Number(product.stockCount ?? 1) > 0)
+
+  async function submit(event) {
+    event.preventDefault()
+    if (saving) return
+
+    const fields = new FormData(event.currentTarget)
+    const product = available.find((item) => item.id === fields.get('productId'))
+    const quantity = Number(fields.get('quantity'))
+    if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > Number(product.stockCount ?? 1)) {
+      setError('Select an available product and enter a quantity within its stock.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    try {
+      const order = await orderService.createOrder({
+        source: 'counter',
+        fullName: String(fields.get('name')).trim(),
+        email: String(fields.get('email')).trim(),
+        phone: String(fields.get('phone')).trim(),
+        cartItems: [{ product, quantity }],
+      })
+      onCreated(order)
+    } catch (failure) {
+      setError(failure.message || 'Unable to create the order.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div className="admin-modal-backdrop" onClick={onClose}>
-      <div className="admin-modal-card" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-backdrop" onClick={saving ? undefined : onClose}>
+      <div className="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="counter-order-title" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h3>Create Hospital Rx / Store Order</h3>
-          <button
-            type="button"
-            className="modal-close-btn"
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
+          <h3 id="counter-order-title">Create a counter order</h3>
+          <button type="button" className="modal-close-btn" aria-label="Close" disabled={saving} onClick={onClose}><X size={18} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="modal-form-body">
-          <div className="modal-form-group">
-            <label>Customer Name</label>
-            <input type="text" required placeholder="Customer Full Name" defaultValue="Sunil Wickramasinghe" />
-          </div>
-          <div className="modal-form-row">
-            <div className="modal-form-group">
-              <label>Contact Phone</label>
-              <input type="tel" defaultValue="+94 77 123 4567" />
+        <form className="modal-form-body" onSubmit={submit}>
+          <fieldset disabled={saving} className="counter-order-fields">
+            <div className="modal-form-group"><label htmlFor="counter-name">Customer name</label><input id="counter-name" name="name" required maxLength={120} /></div>
+            <div className="modal-form-row">
+              <div className="modal-form-group"><label htmlFor="counter-email">Email</label><input id="counter-email" name="email" type="email" required maxLength={150} /></div>
+              <div className="modal-form-group"><label htmlFor="counter-phone">Phone</label><input id="counter-phone" name="phone" type="tel" required maxLength={30} /></div>
             </div>
-            <div className="modal-form-group">
-              <label>Delivery Area</label>
-              <select defaultValue="Colombo 07">
-                <option>Colombo 03</option>
-                <option>Colombo 07</option>
-                <option>Rajagiriya</option>
-                <option>Nugegoda</option>
-                <option>Mount Lavinia</option>
-              </select>
+            <div className="modal-form-row">
+              <div className="modal-form-group">
+                <label htmlFor="counter-product">Product</label>
+                <select id="counter-product" name="productId" required defaultValue="">
+                  <option value="">Select an in-stock product</option>
+                  {available.map((product) => <option key={product.id} value={product.id}>{product.name} · LKR {product.price}</option>)}
+                </select>
+              </div>
+              <div className="modal-form-group"><label htmlFor="counter-quantity">Quantity</label><input id="counter-quantity" name="quantity" type="number" min="1" step="1" defaultValue="1" required /></div>
             </div>
-          </div>
-          <div className="modal-form-group">
-            <label>Select Items</label>
-            <input type="text" defaultValue="Royal Canin Mini Adult 2kg (x1), Vet's Best Omega-3 (x1)" />
-          </div>
+          </fieldset>
+          {error && <p className="operations-error" role="alert">{error}</p>}
           <div className="modal-footer-actions">
-            <button
-              type="button"
-              className="modal-cancel-btn"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="quick-action-btn primary-teal">
-              <span>Create & Print Invoice</span>
+            <button type="button" className="modal-cancel-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="quick-action-btn primary-teal" disabled={saving || !available.length}>
+              {saving ? 'Creating…' : 'Create order'}
             </button>
           </div>
         </form>
