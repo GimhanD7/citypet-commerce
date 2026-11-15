@@ -10,6 +10,7 @@ export default function PasswordResetForm({ initialEmail, onBack, onReset }) {
   const [codeRequested, setCodeRequested] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
 
   async function submit(event) {
     event.preventDefault()
@@ -34,11 +35,17 @@ export default function PasswordResetForm({ initialEmail, onBack, onReset }) {
         })
         onReset(email)
       } else {
-        await apiFetch('auth.php?action=request_password_reset', {
+        const res = await apiFetch('auth.php?action=request_password_reset', {
           method: 'POST',
           body: { email },
           timeout: 30000,
         })
+        if (res?.debug_code) {
+          setCode(res.debug_code)
+        }
+        if (res?.message) {
+          setInfoMessage(res.message)
+        }
         setCodeRequested(true)
       }
     } catch (failure) {
@@ -55,6 +62,11 @@ export default function PasswordResetForm({ initialEmail, onBack, onReset }) {
           ? 'If the account can receive reset codes, the same six-digit code will arrive by email and SMS.'
           : 'Enter your account email to request a reset code by email and SMS.'}
       </p>
+      {infoMessage && (
+        <p style={{ padding: '10px 14px', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: '10px', fontSize: '12.5px', fontWeight: 600, margin: '8px 0 14px' }}>
+          {infoMessage}
+        </p>
+      )}
       <fieldset disabled={busy} className="auth-reset-fields">
         <div className="admin-form-group">
           <label className="admin-field-label" htmlFor={id + '-email'}>Account email</label>
