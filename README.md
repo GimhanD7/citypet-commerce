@@ -79,3 +79,13 @@ The contact details, doctor names, service list and opening hours were reconstru
 ## Asset note
 
 The included dog/cat brand mark was reconstructed from the existing City Pet visual branding reference available online. If the hospital has the original high-resolution official logo (SVG/PNG), replace `src/assets/citypet-logo-mark.png` with that source file for perfect brand fidelity.
+
+### Password reset delivery
+
+Configure the following server environment variables for PHP.
+
+- PASSWORD_RESET_FROM_EMAIL is the address permitted to send mail through the host's PHP mail transport.
+- TEXTLK_API_TOKEN is the Text.lk API token.
+- TEXTLK_SENDER_ID is the approved Text.lk sender ID.
+
+Enable PHP cURL and configure PHP mail delivery on the hosting server. The reset flow uses the account's stored email and phone number.

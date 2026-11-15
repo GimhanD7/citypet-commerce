@@ -131,18 +131,6 @@ export default function RolePermissionsModal({
     <div className="order-modal-backdrop" onClick={onClose} style={{ overflowY: 'auto', padding: '16px' }}>
       <div
         className="order-modal-card role-modal-card-fixed"
-        style={{
-          maxWidth: '880px',
-          width: '100%',
-          maxHeight: 'calc(100vh - 36px)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          borderRadius: '20px',
-          boxShadow: '0 24px 60px rgba(10, 30, 28, 0.28)',
-          background: '#ffffff',
-          margin: 'auto',
-        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -170,10 +158,7 @@ export default function RolePermissionsModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', margin: 0 }}>
-          <div
-            className="order-modal-body"
-            style={{ padding: '20px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}
-          >
+          <div className="order-modal-body role-modal-scrollable-body">
             {/* Role Metadata Row */}
             <div
               style={{
@@ -351,17 +336,7 @@ export default function RolePermissionsModal({
             </div>
 
             {/* Permissions Matrix Table */}
-            <div
-              style={{
-                border: '1.5px solid #d4ece7',
-                borderRadius: '12px',
-                overflowX: 'auto',
-                overflowY: 'auto',
-                maxHeight: '340px',
-                boxShadow: '0 2px 8px rgba(18, 56, 53, 0.03)',
-                background: '#ffffff',
-              }}
-            >
+            <div className="role-permissions-table-wrap">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f5faf8' }}>
                   <tr style={{ background: '#f5faf8', borderBottom: '1.5px solid #d4ece7' }}>

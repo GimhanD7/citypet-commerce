@@ -1,3 +1,4 @@
+import { apiFetch } from '../../../config/api'
 import React, { useState, useEffect, useRef } from 'react'
 import {
   AlertCircle,
@@ -10,8 +11,6 @@ import {
   Copy,
   CreditCard,
   Download,
-  Eye,
-  EyeOff,
   FileSpreadsheet,
   FileText,
   HardDrive,
@@ -23,7 +22,6 @@ import {
   Package,
   Phone,
   RefreshCw,
-  Send,
   Settings,
   Shield,
   ShieldCheck,
@@ -37,8 +35,8 @@ import {
 } from 'lucide-react'
 
 import {
-  smsService,
   orderService,
+  productService,
   userService,
   activityService,
 } from '../../../services/api'
@@ -57,24 +55,9 @@ const DEFAULT_SETTINGS = {
   operatingHours: 'Mon - Sun: 8:00 AM - 10:00 PM (Emergency 24/7)',
 
   // Commerce & Logistics
-  currency: 'LKR',
-  taxPercentage: '8',
   deliveryFee: '450',
   freeDeliveryThreshold: '5000',
-  autoConfirmOrders: true,
-  stockAlertThreshold: '5',
 
-  // SMS Gateway Configuration (Sri Lanka)
-  smsProvider: 'textit',
-  smsApiKey: 'txt_live_9a7d8e2bf41c089',
-  smsSenderId: 'CITYPET',
-  smsBalance: 2480,
-  smsTriggers: {
-    orderPlaced: true,
-    orderShipped: true,
-    paymentReceived: true,
-    vetAppointment: true,
-  },
   smsTemplates: {
     orderPlaced:
       'Dear {customer_name}, thank you for your order {order_number} at City Pet Hospital. Total: LKR {total}. We are preparing your items now!',
@@ -86,10 +69,6 @@ const DEFAULT_SETTINGS = {
       'Reminder: Your veterinary care appointment for your pet is scheduled with City Pet Hospital. Please call {hospital_phone} for assistance.',
   },
 
-  // Security
-  sessionTimeout: '60',
-  requireTwoFactor: false,
-  logAuditTrail: true,
 }
 
 // Helper: Download a string as a file in browser
@@ -176,23 +155,14 @@ export default function SettingsView({
   const [activeSubTab, setActiveSubTab] = useState(initialTab)
 
   // Load persisted settings
-  const [settings, setSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('citypet_portal_settings')
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS
-    } catch {
-      return DEFAULT_SETTINGS
-    }
-  })
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   // SMS Test Sender State
-  const [testPhone, setTestPhone] = useState('077 123 4567')
   const [testTemplate, setTestTemplate] = useState('orderPlaced')
-  const [testMessage, setTestMessage] = useState(settings.smsTemplates.orderPlaced)
-  const [isSendingSms, setIsSendingSms] = useState(false)
-  const [showApiKey, setShowApiKey] = useState(false)
+  const [testMessage, setTestMessage] = useState('')
   const [smsLogs, setSmsLogs] = useState([])
   const [loadingSmsLogs, setLoadingSmsLogs] = useState(false)
+  const [smsHistoryError, setSmsHistoryError] = useState('')
   const [smsStats, setSmsStats] = useState({ total: 0, today: 0 })
 
   // Import State
@@ -218,14 +188,15 @@ export default function SettingsView({
   // Load recent SMS logs from API
   const loadSmsHistory = async () => {
     setLoadingSmsLogs(true)
+    setSmsHistoryError('')
     try {
-      const res = await smsService.getAllSmsLogs(30)
+      const res = await apiFetch('sms.php?limit=30')
       if (res && res.logs) {
         setSmsLogs(res.logs)
         setSmsStats({ total: res.total || res.logs.length, today: res.today || 0 })
       }
     } catch (err) {
-      console.warn('[SettingsView] Error loading SMS logs:', err)
+      setSmsHistoryError(err.message || 'Unable to load SMS history.')
     } finally {
       setLoadingSmsLogs(false)
     }
@@ -243,10 +214,9 @@ export default function SettingsView({
 
   useEffect(() => {
     let active = true
-    orderService.getDeliverySettings().then(([method]) => {
+    apiFetch('portal_settings.php').then(({ settings: saved }) => {
       if (!active) return
-      if (!method) throw new Error('Standard Delivery is unavailable.')
-      setSettings((current) => ({ ...current, deliveryFee: method.fee, freeDeliveryThreshold: method.freeDeliveryThreshold }))
+      setSettings({ ...DEFAULT_SETTINGS, ...saved, smsTemplates: { ...DEFAULT_SETTINGS.smsTemplates, ...saved.smsTemplates } })
       setDeliveryReady(true)
     }).catch((error) => { if (active) setDeliveryLoadError(error.message) })
     return () => { active = false }
@@ -257,44 +227,16 @@ export default function SettingsView({
     if (!deliveryReady || savingSettings) return
     setSavingSettings(true)
     try {
-      const { methods: [method] } = await orderService.updateDeliverySettings({
-        fee: settings.deliveryFee, freeDeliveryThreshold: settings.freeDeliveryThreshold,
+      const session = await apiFetch('auth.php?action=session')
+      const { settings: saved } = await apiFetch('portal_settings.php', {
+        method: 'PUT', body: { settings, csrfToken: session.csrfToken },
       })
-      const saved = { ...settings, deliveryFee: method.fee, freeDeliveryThreshold: method.freeDeliveryThreshold }
-      setSettings(saved)
-      localStorage.setItem('citypet_portal_settings', JSON.stringify(saved))
+      setSettings({ ...DEFAULT_SETTINGS, ...saved })
       showToast('Portal settings saved.')
     } catch (error) {
       showToast(error.message || 'Unable to save settings.')
     } finally {
       setSavingSettings(false)
-    }
-  }
-
-  // Send Test SMS Handler
-  const handleSendTestSms = async (e) => {
-    e.preventDefault()
-    if (!testPhone.trim() || !testMessage.trim()) {
-      showToast('Please enter both phone number and SMS message.')
-      return
-    }
-
-    setIsSendingSms(true)
-    try {
-      const res = await smsService.sendSms({
-        phone: testPhone,
-        customerName: 'Test Recipient',
-        message: testMessage,
-        templateType: testTemplate,
-        orderNumber: 'TEST-SMS',
-      })
-      showToast(`SMS sent to ${testPhone} successfully!`)
-      loadSmsHistory()
-    } catch (err) {
-      showToast(`SMS Dispatch: ${err.message || 'Sent in local simulation mode'}`)
-      loadSmsHistory()
-    } finally {
-      setIsSendingSms(false)
     }
   }
 
@@ -393,8 +335,8 @@ export default function SettingsView({
       products_count: adminProducts.length,
       products: adminProducts,
     }
-    downloadFile(`citypet_full_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(snapshot, null, 2), 'application/json')
-    showToast('Full system backup downloaded successfully!')
+    downloadFile(`citypet_portal_snapshot_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(snapshot, null, 2), 'application/json')
+    showToast('Portal and product snapshot downloaded.')
   }
 
   // Template Download Handlers
@@ -410,6 +352,7 @@ export default function SettingsView({
         stockCount: '25',
         inStock: 'YES',
         badge: 'Bestseller',
+        mainImage: "",
         shortDescription: 'Complete nutrition for adult dogs',
       },
       {
@@ -437,12 +380,14 @@ export default function SettingsView({
         email: 'ruwan.vet@citypet.lk',
         phone: '077 123 4567',
         role: 'veterinary_surgeon',
+        password: '',
       },
       {
         name: 'Kamal Bandara',
         email: 'kamal.staff@citypet.lk',
         phone: '071 987 6543',
         role: 'receptionist_cashier',
+        password: '',
       },
     ]
     const csv = convertToCsv(template)
@@ -485,39 +430,39 @@ export default function SettingsView({
     setImporting(true)
     try {
       if (importType === 'products') {
-        const newProducts = importRows.map((row, idx) => ({
-          id: row.id || `imported_${Date.now()}_${idx}`,
-          name: row.name || 'Unnamed Product',
-          brand: row.brand || 'City Pet',
-          category: row.category || 'food',
-          petType: row.petType || 'all',
-          price: parseFloat(row.price) || 1000,
-          originalPrice: row.originalPrice ? parseFloat(row.originalPrice) : null,
-          stockCount: parseInt(row.stockCount, 10) || 10,
-          inStock: row.inStock === 'NO' ? false : true,
-          badge: row.badge || '',
-          rating: 5.0,
-          reviews: 1,
-          imageType: 'royal-canin-dog',
-          shortDescription: row.shortDescription || '',
-        }))
-
-        if (setAdminProducts) {
-          setAdminProducts((prev) => [...newProducts, ...prev])
+        const imported = []
+        const failures = []
+        for (const [index, row] of importRows.entries()) {
+          try {
+            const price = Number(row.price)
+            if (!row.name || !row.mainImage || !Number.isFinite(price) || price <= 0) throw new Error('Name, positive price and mainImage are required.')
+            const result = await productService.createProduct({
+              name: row.name, brand: row.brand || 'City Pet', category: row.category || 'food',
+              petType: row.petType || 'all', price, mainImage: row.mainImage,
+              stockCount: Number(row.stockCount || 0), shortDescription: row.shortDescription || '',
+            })
+            imported.push(result)
+          } catch (error) {
+            failures.push('Row ' + (index + 2) + ': ' + error.message)
+          }
         }
-        showToast(`Successfully imported ${newProducts.length} products into hospital catalog!`)
+        if (imported.length) {
+          const products = await productService.getProducts()
+          setAdminProducts?.(products)
+        }
+        showToast('Imported ' + imported.length + ' products. ' + (failures.length ? failures.length + ' failed. ' + failures[0] : ''))
       } else {
         // Users import
         let successCount = 0
         for (const row of importRows) {
-          if (row.name && row.email) {
+          if (row.name && row.email && typeof row.password === 'string' && row.password.length >= 8) {
             try {
               await userService.createUser({
                 name: row.name,
                 email: row.email,
                 phone: row.phone || '',
                 role: row.role || 'user',
-                password: 'TempPassword@123',
+                password: row.password,
               })
               successCount++
             } catch {
@@ -525,7 +470,7 @@ export default function SettingsView({
             }
           }
         }
-        showToast(`Successfully created ${successCount} user accounts from CSV!`)
+        showToast('Created ' + successCount + ' accounts. ' + (importRows.length - successCount) + ' rows were skipped or failed. Each row needs an initial password of at least 8 characters.')
       }
 
       setImportRows([])
@@ -546,7 +491,7 @@ export default function SettingsView({
           <span className="pm-eyebrow">CONFIGURATION &amp; TOOLS</span>
           <h2 className="pm-page-title">Hospital Portal Settings</h2>
           <p className="pm-page-desc">
-            Manage hospital profile, SMS communications gateway, automated event triggers, and import/export tools.
+            Manage hospital details, delivery rates, SMS templates, and data imports and exports.
           </p>
         </div>
 
@@ -567,7 +512,6 @@ export default function SettingsView({
           >
             <MessageSquare size={15} />
             <span>SMS Communications</span>
-            <span className="settings-tab-badge">Active</span>
           </button>
           <button
             type="button"
@@ -600,7 +544,7 @@ export default function SettingsView({
               </span>
               <div>
                 <h3>Hospital Identification &amp; Contact Details</h3>
-                <p>Official information displayed across patient invoices, SMS masks, and receipts</p>
+                <p>Hospital contact and registration details stored in the portal.</p>
               </div>
             </div>
             <button type="submit" className="settings-save-btn" disabled={!deliveryReady || savingSettings}>
@@ -707,30 +651,6 @@ export default function SettingsView({
 
           <div className="settings-form-grid">
             <div className="settings-field">
-              <label className="settings-label">Operating Currency</label>
-              <select
-                className="settings-select"
-                value={settings.currency}
-                onChange={(e) => setSettings((s) => ({ ...s, currency: e.target.value }))}
-              >
-                <option value="LKR">LKR — Sri Lankan Rupee</option>
-                <option value="USD">USD — US Dollar</option>
-              </select>
-            </div>
-
-            <div className="settings-field">
-              <label className="settings-label">VAT / Healthcare Tax Rate (%)</label>
-              <input
-                type="number"
-                className="settings-input"
-                min="0"
-                max="30"
-                value={settings.taxPercentage}
-                onChange={(e) => setSettings((s) => ({ ...s, taxPercentage: e.target.value }))}
-              />
-            </div>
-
-            <div className="settings-field">
               <label className="settings-label">Standard Islandwide Delivery Fee (LKR)</label>
               <input
                 type="number"
@@ -777,243 +697,36 @@ export default function SettingsView({
           ══════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'sms' && (
         <div className="settings-card">
-          {/* Status Indicator Banner */}
-          <div className="sms-status-banner">
-            <div className="sms-status-left">
-              <div className="sms-pulse-indicator" />
-              <div className="sms-status-texts">
-                <h4>SMS Gateway Online • TextIt.biz Sri Lanka Bridge</h4>
-                <p>Delivering real-time SMS to Dialog, Mobitel, Airtel &amp; Hutch networks</p>
-              </div>
-            </div>
-
-            <div className="sms-balance-badge">
-              <div style={{ textAlign: 'right' }}>
-                <span className="sms-credit-label">Remaining Balance</span>
-                <div className="sms-credit-number">{settings.smsBalance} Credits</div>
-              </div>
-              <button
-                type="button"
-                className="settings-secondary-btn"
-                style={{ padding: '6px 12px', fontSize: '11.5px' }}
-                onClick={() => showToast('SMS Gateway Balance: 2,480 credits (Synchronized)')}
-              >
-                <RefreshCw size={12} /> Sync
-              </button>
-            </div>
-          </div>
-
-          {/* Gateway Credentials */}
           <div className="settings-section-header">
             <div className="settings-section-title-wrap">
-              <span className="settings-icon-bubble" style={{ background: '#e6f5f3', color: '#04959d' }}>
-                <MessageSquare size={22} />
-              </span>
-              <div>
-                <h3>SMS Gateway Provider &amp; Sender Mask</h3>
-                <p>Configure credentials for Sri Lankan SMS aggregators</p>
-              </div>
+              <div><h3>SMS Communications</h3><p>Delivery is unavailable until an SMS provider is connected.</p></div>
             </div>
           </div>
-
-          <div className="settings-form-grid">
-            <div className="settings-field">
-              <label className="settings-label">SMS Provider Gateway</label>
-              <select
-                className="settings-select"
-                value={settings.smsProvider}
-                onChange={(e) => setSettings((s) => ({ ...s, smsProvider: e.target.value }))}
-              >
-                <option value="textit">TextIt.biz (Direct Sri Lankan Gateway)</option>
-                <option value="notifylk">Notify.lk (Sri Lanka Telecom Bridge)</option>
-                <option value="dialog">Dialog mConnect Direct Business SMS</option>
-                <option value="mobitel">Mobitel Enterprise SMS API</option>
-                <option value="custom">Generic REST / HTTP SMS Webhook</option>
-              </select>
-            </div>
-
-            <div className="settings-field">
-              <label className="settings-label">Sender ID / Mask *</label>
-              <input
-                type="text"
-                className="settings-input"
-                maxLength={11}
-                required
-                value={settings.smsSenderId}
-                onChange={(e) => setSettings((s) => ({ ...s, smsSenderId: e.target.value }))}
-                placeholder="CITYPET"
-              />
-              <small className="settings-hint">Authorized alphanumeric mask approved by TRCSL</small>
-            </div>
-
-            <div className="settings-field-full">
-              <label className="settings-label">API Secret Key / Bearer Token</label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  className="settings-input"
-                  style={{ paddingRight: '45px', fontFamily: showApiKey ? 'inherit' : 'monospace' }}
-                  value={settings.smsApiKey}
-                  onChange={(e) => setSettings((s) => ({ ...s, smsApiKey: e.target.value }))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    border: 'none',
-                    background: 'none',
-                    color: '#638581',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Automated Event Notification Triggers */}
-          <div className="settings-section-header" style={{ marginTop: '12px' }}>
-            <div className="settings-section-title-wrap">
-              <span className="settings-icon-bubble" style={{ background: '#f5f0fb', color: '#8b5cf6' }}>
-                <Sparkles size={22} />
-              </span>
-              <div>
-                <h3>Automated Customer SMS Triggers</h3>
-                <p>Enable automated broadcasts sent to customers upon hospital events</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="sms-triggers-list">
-            {[
-              {
-                key: 'orderPlaced',
-                title: 'Order Placed Confirmation',
-                desc: 'Instantly notify customer with order # and total amount upon checkout',
-                icon: ShoppingBag,
-                color: '#04959d',
-                bg: '#e6f5f3',
-              },
-              {
-                key: 'orderShipped',
-                title: 'Order Dispatched / Shipped',
-                desc: 'Send tracking update when courier package is dispatched from hospital',
-                icon: Truck,
-                color: '#0284c7',
-                bg: '#eef8fc',
-              },
-              {
-                key: 'paymentReceived',
-                title: 'Payment Verification Receipt',
-                desc: 'Confirm payment receipt for credit cards, bank transfer, or cash',
-                icon: CreditCard,
-                color: '#00a86b',
-                bg: '#e6f6f3',
-              },
-              {
-                key: 'vetAppointment',
-                title: 'Clinical Appointment & Prescription',
-                desc: 'Send patient reminder 24h prior to doctor checkup or vaccine due date',
-                icon: Calendar,
-                color: '#b45309',
-                bg: '#fffbeb',
-              },
-            ].map(({ key, title, desc, icon: Icon, color, bg }) => {
-              const isEnabled = !!settings.smsTriggers[key]
-              return (
-                <div
-                  key={key}
-                  className={`sms-trigger-card ${isEnabled ? 'enabled' : ''}`}
-                  onClick={() =>
-                    setSettings((s) => ({
-                      ...s,
-                      smsTriggers: { ...s.smsTriggers, [key]: !isEnabled },
-                    }))
-                  }
-                >
-                  <div className="sms-trigger-info">
-                    <span className="sms-trigger-icon" style={{ background: bg, color }}>
-                      <Icon size={18} />
-                    </span>
-                    <div className="sms-trigger-texts">
-                      <strong>{title}</strong>
-                      <p>{desc}</p>
-                    </div>
-                  </div>
-                  <div className={`sms-switch-toggle ${isEnabled ? 'on' : ''}`}>
-                    <div className="sms-switch-dot" />
-                  </div>
+          <form onSubmit={handleSaveSettings}>
+            <div className="settings-form-grid">
+              {Object.entries(settings.smsTemplates).map(([key, template]) => (
+                <div className="settings-field" key={key}>
+                  <label className="settings-label" htmlFor={"sms-template-" + key}>
+                    {{ orderPlaced: 'Order placed', orderShipped: 'Order shipped', paymentReceived: 'Payment received', vetAppointment: 'Appointment reminder' }[key]}
+                  </label>
+                  <textarea id={"sms-template-" + key} className="settings-textarea" rows={3} maxLength={480}
+                    required value={template} onChange={(event) => setSettings((current) => ({
+                      ...current, smsTemplates: { ...current.smsTemplates, [key]: event.target.value },
+                    }))} />
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+            {deliveryLoadError && <p role="alert">{deliveryLoadError}</p>}
+            <button type="submit" className="settings-save-btn" disabled={!deliveryReady || savingSettings}>Save SMS templates</button>
+          </form>
 
-          {/* Live Test SMS Sender */}
           <div className="sms-test-dispatcher">
-            <div className="sms-test-header">
-              <h4>
-                <Send size={16} color="#04959d" /> Direct Test SMS Dispatcher
-              </h4>
-              <span className="sms-char-counter">
-                {testMessage.length} / 160 chars ({Math.ceil(testMessage.length / 160) || 1} SMS)
-              </span>
-            </div>
-
-            <form onSubmit={handleSendTestSms} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label className="settings-label">Recipient Mobile Number *</label>
-                  <input
-                    type="tel"
-                    className="settings-input"
-                    required
-                    placeholder="077 123 4567"
-                    value={testPhone}
-                    onChange={(e) => setTestPhone(e.target.value)}
-                  />
-                  <small className="settings-hint">Supports formats: 077XXXXXXX or +9477XXXXXXX</small>
-                </div>
-
-                <div>
-                  <label className="settings-label">Select Pre-configured Template</label>
-                  <select
-                    className="settings-select"
-                    value={testTemplate}
-                    onChange={(e) => handleSelectTemplate(e.target.value)}
-                  >
-                    <option value="orderPlaced">Order Placed Template</option>
-                    <option value="orderShipped">Order Dispatched Template</option>
-                    <option value="paymentReceived">Payment Received Template</option>
-                    <option value="vetAppointment">Vet Appointment Template</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="settings-label">SMS Message Body</label>
-                <textarea
-                  className="settings-textarea"
-                  rows={3}
-                  required
-                  value={testMessage}
-                  onChange={(e) => setTestMessage(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="submit"
-                  disabled={isSendingSms}
-                  className="sms-dispatch-btn"
-                >
-                  <Send size={14} />
-                  <span>{isSendingSms ? 'Transmitting SMS...' : 'Send Live Test SMS'}</span>
-                </button>
-              </div>
-            </form>
+            <label className="settings-label" htmlFor="sms-preview-template">Preview a template</label>
+            <select id="sms-preview-template" className="settings-select" value={testMessage ? testTemplate : ""} onChange={(event) => handleSelectTemplate(event.target.value)}>
+              <option value="" disabled>Select a template</option>
+              {Object.keys(settings.smsTemplates).map((key) => <option key={key} value={key}>{key}</option>)}
+            </select>
+            <p>{testMessage || "Choose a template to preview sample order details."}</p>
           </div>
 
           {/* SMS Audit Logs History Table (From MySQL) */}
@@ -1075,15 +788,15 @@ export default function SettingsView({
                       </td>
                       <td>
                         <span className={`sms-badge ${log.status || 'sent'}`}>
-                          <Check size={11} /> {log.status || 'Delivered'}
+                          <Check size={11} /> {log.status === 'sent' ? 'Unverified' : log.status || 'Unknown'}
                         </span>
                       </td>
                     </tr>
                   ))}
-                  {smsLogs.length === 0 && (
+                  {(smsHistoryError || smsLogs.length === 0) && (
                     <tr>
                       <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#648984' }}>
-                        {loadingSmsLogs ? 'Loading SMS logs from database...' : 'No SMS messages sent yet. Use the Test Sender above to dispatch an SMS!'}
+                        {loadingSmsLogs ? 'Loading SMS history…' : smsHistoryError || 'No SMS history found.'}
                       </td>
                     </tr>
                   )}
@@ -1182,7 +895,7 @@ export default function SettingsView({
                 <div className="data-action-left">
                   <HardDrive size={20} color="#0e5d59" />
                   <div className="data-action-texts">
-                    <strong>Full System Database Backup</strong>
+                    <strong>Portal settings and product snapshot</strong>
                     <span>1-click JSON snapshot of settings, products &amp; configuration</span>
                   </div>
                 </div>
@@ -1350,8 +1063,8 @@ export default function SettingsView({
                 <ShieldCheck size={22} />
               </span>
               <div>
-                <h3>Access Control, Session Security &amp; RBAC</h3>
-                <p>Configure password security guidelines and jump to granular role permissions</p>
+                <h3>Access Control &amp; Roles</h3>
+                <p>Manage staff roles and permissions in Users.</p>
               </div>
             </div>
             <button
@@ -1361,34 +1074,6 @@ export default function SettingsView({
             >
               <Users size={15} /> Open Users &amp; Roles Matrix
             </button>
-          </div>
-
-          <div className="settings-form-grid">
-            <div className="settings-field">
-              <label className="settings-label">Admin Session Idle Inactivity Timeout</label>
-              <select
-                className="settings-select"
-                value={settings.sessionTimeout}
-                onChange={(e) => setSettings((s) => ({ ...s, sessionTimeout: e.target.value }))}
-              >
-                <option value="15">15 Minutes of inactivity</option>
-                <option value="30">30 Minutes of inactivity</option>
-                <option value="60">1 Hour of inactivity</option>
-                <option value="240">4 Hours (Clinical shift)</option>
-              </select>
-            </div>
-
-            <div className="settings-field">
-              <label className="settings-label">Security Audit Logging</label>
-              <select
-                className="settings-select"
-                value={settings.logAuditTrail ? 'enabled' : 'disabled'}
-                onChange={(e) => setSettings((s) => ({ ...s, logAuditTrail: e.target.value === 'enabled' }))}
-              >
-                <option value="enabled">Enabled (Logs every Admin action to MySQL)</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </div>
           </div>
 
           <div style={{ padding: '18px 20px', background: '#f8faf9', borderRadius: '14px', border: '1px solid #d4ece7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>

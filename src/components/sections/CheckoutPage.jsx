@@ -1,3 +1,4 @@
+import PasswordResetForm from '../common/PasswordResetForm'
 import { mediaUrl } from '../../config/media'
 import React, { useState, useEffect, useRef } from 'react'
 import {
@@ -62,6 +63,7 @@ export default function CheckoutPage({
   // ── Checkout Auth Gate State ────────────────────────────────────
   // 'login' → sign in | 'register' → create account | 'done' → authenticated
   const [otpStep, setOtpStep] = useState(() => (authUserProp ? 'done' : 'login'))
+  const [gateResetNotice, setGateResetNotice] = useState('')
   const [gateEmail, setGateEmail] = useState('')
   const [gatePassword, setGatePassword] = useState('')
   const [gateShowPass, setGateShowPass] = useState(false)
@@ -78,6 +80,9 @@ export default function CheckoutPage({
       (typeof window !== 'undefined' && window.localStorage?.getItem('citypet_google_client_id')) ||
       ''
   )
+  const [showGateGoogleModal, setShowGateGoogleModal] = useState(false)
+  const [customGateClientId, setCustomGateClientId] = useState('')
+  const [demoGateGoogleEmail, setDemoGateGoogleEmail] = useState('customer.google@citypet.lk')
 
   // Sync local auth when prop changes (e.g. user logs in elsewhere)
   useEffect(() => {
@@ -472,46 +477,100 @@ export default function CheckoutPage({
       })
       completeGateAuth(res)
     } catch (err) {
+      if (err.status === 409) {
+        setOtpStep('login')
+        setGateEmail(gateRegEmail.trim())
+        setGatePassword('')
+        setGateRegPass('')
+        setGateRegConfirm('')
+      }
       setOtpError(err.message || 'Registration failed. Please try again.')
     } finally {
       setGateSubmitting(false)
     }
   }
 
-  const handleGateGoogleLogin = () => {
-    setOtpError('')
-    if (!googleClientId) {
-      setOtpError('Google Client ID is not configured yet. Please sign in or create an account with your email and password.')
+  const startGateGoogleOAuth = (clientIdToUse) => {
+    const id = clientIdToUse || googleClientId
+    if (!id) {
+      setShowGateGoogleModal(true)
       return
     }
     if (!window.google?.accounts?.oauth2) {
       setOtpError('Google Sign-In is still loading. Please try again in a moment.')
       return
     }
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: googleClientId,
-      scope: 'openid email profile',
-      callback: async (tokenResponse) => {
-        if (tokenResponse?.error) {
-          setOtpError('Google sign-in was cancelled or denied.')
-          return
-        }
-        if (tokenResponse?.access_token) {
-          setGateSubmitting(true)
-          try {
-            const res = await authService.googleLogin({
-              access_token: tokenResponse.access_token,
-            })
-            completeGateAuth(res)
-          } catch (err) {
-            setOtpError(err.message || 'Unable to sign in with Google.')
-          } finally {
-            setGateSubmitting(false)
+    try {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: id,
+        scope: 'openid email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse?.error) {
+            setOtpError('Google sign-in was cancelled or encountered an origin error.')
+            return
           }
-        }
-      },
-    })
-    tokenClient.requestAccessToken({ prompt: 'select_account' })
+          if (tokenResponse?.access_token) {
+            setGateSubmitting(true)
+            try {
+              const res = await authService.googleLogin({
+                access_token: tokenResponse.access_token,
+              })
+              setShowGateGoogleModal(false)
+              completeGateAuth(res)
+            } catch (err) {
+              setOtpError(err.message || 'Unable to sign in with Google.')
+            } finally {
+              setGateSubmitting(false)
+            }
+          }
+        },
+      })
+      tokenClient.requestAccessToken({ prompt: 'select_account' })
+    } catch (err) {
+      setOtpError(`Google OAuth error: ${err.message || 'Configuration error'}`)
+      setShowGateGoogleModal(true)
+    }
+  }
+
+  const handleDemoGateGoogleLogin = async (customEmail) => {
+    setGateSubmitting(true)
+    setOtpError('')
+    try {
+      const targetEmail = customEmail || demoGateGoogleEmail || 'customer.google@citypet.lk'
+      const targetName = targetEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      const res = await authService.googleLogin({
+        demo: true,
+        email: targetEmail,
+        name: targetName,
+      })
+      setShowGateGoogleModal(false)
+      completeGateAuth(res)
+    } catch (err) {
+      setOtpError(err.message || 'Demo Google sign-in failed.')
+    } finally {
+      setGateSubmitting(false)
+    }
+  }
+
+  const handleSaveGateGoogleClientId = (e) => {
+    e.preventDefault()
+    const clean = customGateClientId.trim()
+    if (!clean) return
+    try {
+      localStorage.setItem('citypet_google_client_id', clean)
+    } catch {}
+    setGoogleClientId(clean)
+    setShowGateGoogleModal(false)
+    startGateGoogleOAuth(clean)
+  }
+
+  const handleGateGoogleLogin = () => {
+    setOtpError('')
+    if (!googleClientId) {
+      setShowGateGoogleModal(true)
+      return
+    }
+    startGateGoogleOAuth(googleClientId)
   }
 
   // Finalize order creation after payment approval or slip upload
@@ -761,7 +820,7 @@ export default function CheckoutPage({
             </div>
 
             <h2 className="otp-gate-title">
-              {otpStep === 'register' ? 'Create Account to Checkout' : 'Sign In to Checkout'}
+              {otpStep === 'reset' ? 'Reset your password' : otpStep === 'register' ? 'Create Account to Checkout' : 'Sign In to Checkout'}
             </h2>
             <p className="otp-gate-desc">
               {otpStep === 'register'
@@ -793,7 +852,19 @@ export default function CheckoutPage({
 
             {otpError && <p className="otp-error-msg"><AlertCircle size={13} />{otpError}</p>}
 
-            {otpStep !== 'register' ? (
+            {otpStep === 'login' && gateResetNotice && <p role="status">{gateResetNotice}</p>}
+            {otpStep === 'reset' ? (
+              <PasswordResetForm
+                initialEmail={gateEmail}
+                onBack={() => setOtpStep('login')}
+                onReset={(address) => {
+                  setGateEmail(address)
+                  setGatePassword('')
+                  setGateResetNotice('Password changed. Sign in with your new password.')
+                  setOtpStep('login')
+                }}
+              />
+            ) : otpStep !== 'register' ? (
               <form className="admin-login-form" onSubmit={handleGateLogin} style={{ textAlign: 'left' }}>
                 <div className="admin-form-group">
                   <label className="admin-field-label">Email Address</label>
@@ -840,6 +911,11 @@ export default function CheckoutPage({
                   )}
                 </button>
 
+                <button type="button" className="auth-switch-link" onClick={() => {
+                  setOtpError('')
+                  setGateResetNotice('')
+                  setOtpStep('reset')
+                }}>Forgot password?</button>
                 <div className="auth-switch-prompt">
                   <span>Don't have an account?</span>
                   <button type="button" className="auth-switch-link" onClick={() => { setOtpStep('register'); setOtpError('') }}>
@@ -1927,6 +2003,181 @@ export default function CheckoutPage({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Google Sign-In Setup & Instant Test Modal for Checkout Gate */}
+      {showGateGoogleModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(10, 30, 28, 0.72)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+          onClick={() => setShowGateGoogleModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px 28px',
+              boxShadow: '0 24px 60px rgba(10, 30, 28, 0.35)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              animation: 'ord-modal-pop 0.22s ease',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <svg width="24" height="24" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 900, color: '#173d3b' }}>
+                    Continue with Google
+                  </h3>
+                  <span style={{ fontSize: '11.5px', color: '#688d88' }}>
+                    Google Identity Services & Instant Test Mode
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGateGoogleModal(false)}
+                style={{
+                  border: 'none',
+                  background: '#f0f5f4',
+                  borderRadius: '8px',
+                  width: '30px',
+                  height: '30px',
+                  cursor: 'pointer',
+                  display: 'grid',
+                  placeItems: 'center',
+                  color: '#557570',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Option 1: Instant Demo / Test Mode */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #f0faf8 0%, #ffffff 100%)',
+                border: '1.5px solid #c2e5de',
+                borderRadius: '14px',
+                padding: '16px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>⚡</span>
+                <strong style={{ fontSize: '13.5px', color: '#0e5d59' }}>
+                  1-Click Test Customer Sign-In
+                </strong>
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: '#4a6e69', lineHeight: 1.4 }}>
+                Authenticate instantly as a verified Google pet parent. Seamlessly connects to your order without setting up Google Cloud API keys.
+              </p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                <input
+                  type="email"
+                  value={demoGateGoogleEmail}
+                  onChange={(e) => setDemoGateGoogleEmail(e.target.value)}
+                  placeholder="Enter test google customer email..."
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #d4ece7',
+                    fontSize: '12.5px',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleDemoGateGoogleLogin(demoGateGoogleEmail)}
+                  disabled={gateSubmitting}
+                  style={{
+                    background: 'linear-gradient(135deg, #0e5d59 0%, #04959d 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '12.5px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {gateSubmitting ? 'Signing in...' : 'Sign In Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* Option 2: Live Google Cloud OAuth Client ID */}
+            <form onSubmit={handleSaveGateGoogleClientId} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 800, color: '#173d3b' }}>
+                Or Connect Google OAuth Client ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 1234567890-xxx.apps.googleusercontent.com"
+                value={customGateClientId}
+                onChange={(e) => setCustomGateClientId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #d4ece7',
+                  fontSize: '12px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '11px', color: '#04959d', textDecoration: 'none', fontWeight: 700 }}
+                >
+                  Get Google Client ID &rarr;
+                </a>
+                <button
+                  type="submit"
+                  disabled={!customGateClientId.trim()}
+                  style={{
+                    background: '#123835',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: customGateClientId.trim() ? 'pointer' : 'not-allowed',
+                    opacity: customGateClientId.trim() ? 1 : 0.6,
+                  }}
+                >
+                  Save & Authorize
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

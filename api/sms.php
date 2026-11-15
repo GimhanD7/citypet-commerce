@@ -43,11 +43,12 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 switch ($method) {
     case 'GET':
+        currentSessionUser($pdo, true);
         // Retrieve SMS logs: by order_id or all
         $orderId = trim((string)($_GET['order_id'] ?? $_GET['orderId'] ?? ''));
         $orderNumber = trim((string)($_GET['order_number'] ?? $_GET['orderNumber'] ?? ''));
         $phone = trim((string)($_GET['phone'] ?? ''));
-        $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 200) : 50;
+        $limit = isset($_GET['limit']) ? max(1, min((int)$_GET['limit'], 200)) : 50;
 
         if (!empty($orderId) || !empty($orderNumber)) {
             $stmt = $pdo->prepare("
@@ -57,6 +58,10 @@ switch ($method) {
             ");
             $stmt->execute([$orderId ?: $orderNumber, $orderNumber ?: $orderId]);
             $logs = $stmt->fetchAll();
+            foreach ($logs as &$log) {
+                if ($log['status'] === 'sent') $log['status'] = 'unverified';
+            }
+            unset($log);
             jsonResponse([
                 'logs' => $logs,
                 'count' => count($logs)
@@ -72,6 +77,10 @@ switch ($method) {
             $stmt->bindValue(2, $limit, PDO::PARAM_INT);
             $stmt->execute();
             $logs = $stmt->fetchAll();
+            foreach ($logs as &$log) {
+                if ($log['status'] === 'sent') $log['status'] = 'unverified';
+            }
+            unset($log);
             jsonResponse([
                 'logs' => $logs,
                 'count' => count($logs)
@@ -86,6 +95,10 @@ switch ($method) {
             $stmt->bindValue(1, $limit, PDO::PARAM_INT);
             $stmt->execute();
             $logs = $stmt->fetchAll();
+            foreach ($logs as &$log) {
+                if ($log['status'] === 'sent') $log['status'] = 'unverified';
+            }
+            unset($log);
 
             // Calculate stats
             $countStmt = $pdo->query("SELECT COUNT(*) FROM `sms_logs`");
@@ -103,90 +116,9 @@ switch ($method) {
         break;
 
     case 'POST':
-        // Send / Dispatch a new SMS notification
-        $user = currentSessionUser($pdo, true); // Admin only
-        $input = getRequestData();
-        checkProductCsrf($input);
-
-        $recipientPhone = trim((string)($input['phone'] ?? $input['recipientPhone'] ?? ''));
-        $message = trim((string)($input['message'] ?? ''));
-        $orderId = trim((string)($input['orderId'] ?? $input['order_id'] ?? '')) ?: null;
-        $orderNumber = trim((string)($input['orderNumber'] ?? $input['order_number'] ?? '')) ?: null;
-        $recipientName = trim((string)($input['recipientName'] ?? $input['customerName'] ?? 'Valued Customer'));
-        $templateType = trim((string)($input['templateType'] ?? $input['template'] ?? 'custom'));
-        $sentBy = $user['name'] ?? 'Admin Staff';
-
-        if (empty($recipientPhone)) {
-            jsonError('Recipient phone number is required.', 422);
-        }
-        if (empty($message)) {
-            jsonError('SMS message content cannot be empty.', 422);
-        }
-
-        // Clean phone number format for Sri Lankan numbers (+94 / 07x)
-        $cleanPhone = preg_replace('/[^0-9+]/', '', $recipientPhone);
-
-        $smsId = 'sms_' . bin2hex(random_bytes(10));
-        $status = 'sent'; // Recorded as sent (ready to bridge to Dialog/Mobitel/NotifyLK SMS Gateway)
-
-        $stmt = $pdo->prepare("
-            INSERT INTO `sms_logs` (
-                `id`, `order_id`, `order_number`, `recipient_phone`,
-                `recipient_name`, `message`, `status`, `template_type`, `sent_by`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $smsId,
-            $orderId,
-            $orderNumber,
-            $cleanPhone,
-            $recipientName,
-            $message,
-            $status,
-            $templateType,
-            $sentBy
-        ]);
-
-        // Record in User Activity Logs
-        try {
-            $logStmt = $pdo->prepare("
-                INSERT INTO `user_activity_logs` (
-                    `id`, `user_id`, `user_name`, `role`, `action`,
-                    `description`, `entity_type`, `entity_id`
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $logId = 'act_' . bin2hex(random_bytes(8));
-            $actionDesc = "Sent SMS ({$templateType}) to {$recipientName} ({$cleanPhone}) for order " . ($orderNumber ?: 'direct');
-            $logStmt->execute([
-                $logId,
-                $user['id'] ?? null,
-                $sentBy,
-                'admin',
-                'sms_sent',
-                $actionDesc,
-                'sms',
-                $smsId
-            ]);
-        } catch (\Throwable $t) {
-            // Don't fail SMS if activity log fails
-        }
-
-        jsonResponse([
-            'success' => true,
-            'sms' => [
-                'id' => $smsId,
-                'orderId' => $orderId,
-                'orderNumber' => $orderNumber,
-                'phone' => $cleanPhone,
-                'recipientName' => $recipientName,
-                'message' => $message,
-                'status' => $status,
-                'templateType' => $templateType,
-                'sentBy' => $sentBy,
-                'createdAt' => date('Y-m-d H:i:s')
-            ]
-        ], 201, "SMS successfully dispatched to {$cleanPhone}!");
-        break;
+        currentSessionUser($pdo, true);
+        checkProductCsrf(getRequestData());
+        jsonError('SMS delivery is unavailable until a provider is connected.', 503);
 
     default:
         jsonError('Method not allowed', 405);

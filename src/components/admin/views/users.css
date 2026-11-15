@@ -936,3 +936,71 @@
     align-items: flex-start;
   }
 }
+
+/* ============================================================
+   ROLE PERMISSIONS MODAL - FULL VERTICAL SCROLL & FIX
+   ============================================================ */
+.role-modal-card-fixed {
+  max-width: 920px !important;
+  width: 95% !important;
+  max-height: 88vh !important;
+  height: 85vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: 22px !important;
+  box-shadow: 0 28px 70px rgba(10, 30, 28, 0.35) !important;
+  background: #ffffff !important;
+  margin: auto !important;
+}
+
+.role-modal-scrollable-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 22px 26px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #04959d #ebf4f1 !important;
+}
+
+.role-modal-scrollable-body::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.role-modal-scrollable-body::-webkit-scrollbar-track {
+  background: #ebf4f1 !important;
+  border-radius: 8px !important;
+}
+
+.role-modal-scrollable-body::-webkit-scrollbar-thumb {
+  background: #04959d !important;
+  border-radius: 8px !important;
+}
+
+.role-modal-scrollable-body::-webkit-scrollbar-thumb:hover {
+  background: #0e5d59 !important;
+}
+
+.role-permissions-table-wrap {
+  border: 1.5px solid #d4ece7;
+  border-radius: 14px;
+  overflow: visible;
+  box-shadow: 0 4px 14px rgba(18, 56, 53, 0.04);
+  background: #ffffff;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.role-permissions-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.role-permissions-table-wrap thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f5faf8;
+}
+
