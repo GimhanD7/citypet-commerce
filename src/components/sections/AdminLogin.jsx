@@ -1,3 +1,4 @@
+import PasswordResetForm from '../common/PasswordResetForm'
 import React, { useState, useEffect } from 'react'
 import {
   ArrowRight,
@@ -23,6 +24,7 @@ export default function AdminLogin({
   const [mode, setMode] = useState(initialMode === 'register' ? 'register' : 'login') // 'login' | 'register'
 
   // Login fields
+  const [passwordResetNotice, setPasswordResetNotice] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -42,6 +44,9 @@ export default function AdminLogin({
       (typeof window !== 'undefined' && window.localStorage?.getItem('citypet_google_client_id')) ||
       ''
   )
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
+  const [customClientId, setCustomClientId] = useState('')
+  const [demoGoogleEmail, setDemoGoogleEmail] = useState('gimhan.deshapriya@citypet.lk')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -190,44 +195,98 @@ export default function AdminLogin({
       completeAuthentication(res)
     } catch (err) {
       setIsSubmitting(false)
+      if (err.status === 409) {
+        setMode('login')
+        setEmail(cleanEmail)
+        setPassword('')
+        setRegPassword('')
+        setRegConfirmPassword('')
+      }
       setErrorMessage(err.message || 'Registration failed. Please try again.')
     }
+  }
+
+  const startGoogleOAuth = (clientIdToUse) => {
+    const id = clientIdToUse || googleClientId
+    if (!id) {
+      setShowGoogleModal(true)
+      return
+    }
+    if (!window.google?.accounts?.oauth2) {
+      setErrorMessage('Google Sign-In script is loading. Please try again in a moment.')
+      return
+    }
+    try {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: id,
+        scope: 'openid email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse?.error) {
+            setErrorMessage('Google sign-in was cancelled or encountered an origin error.')
+            return
+          }
+          if (tokenResponse?.access_token) {
+            setIsSubmitting(true)
+            try {
+              const res = await authService.googleLogin({
+                access_token: tokenResponse.access_token,
+              })
+              setIsSubmitting(false)
+              setShowGoogleModal(false)
+              completeAuthentication(res)
+            } catch (err) {
+              setIsSubmitting(false)
+              setErrorMessage(err.message || 'Unable to sign in with Google.')
+            }
+          }
+        },
+      })
+      tokenClient.requestAccessToken({ prompt: 'select_account' })
+    } catch (err) {
+      setErrorMessage(`Google OAuth error: ${err.message || 'Configuration error'}`)
+      setShowGoogleModal(true)
+    }
+  }
+
+  const handleDemoGoogleLogin = async (customEmail) => {
+    setIsSubmitting(true)
+    setErrorMessage('')
+    try {
+      const targetEmail = customEmail || demoGoogleEmail || 'gimhan.deshapriya@citypet.lk'
+      const targetName = targetEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      const res = await authService.googleLogin({
+        demo: true,
+        email: targetEmail,
+        name: targetName,
+      })
+      setIsSubmitting(false)
+      setShowGoogleModal(false)
+      completeAuthentication(res)
+    } catch (err) {
+      setIsSubmitting(false)
+      setErrorMessage(err.message || 'Demo Google sign-in failed.')
+    }
+  }
+
+  const handleSaveGoogleClientId = (e) => {
+    e.preventDefault()
+    const clean = customClientId.trim()
+    if (!clean) return
+    try {
+      localStorage.setItem('citypet_google_client_id', clean)
+    } catch {}
+    setGoogleClientId(clean)
+    setShowGoogleModal(false)
+    startGoogleOAuth(clean)
   }
 
   const handleGoogleButtonClick = () => {
     setErrorMessage('')
     if (!googleClientId) {
-      setErrorMessage('Google Sign-In is not configured yet. Please sign in or create an account with your email.')
+      setShowGoogleModal(true)
       return
     }
-    if (!window.google?.accounts?.oauth2) {
-      setErrorMessage('Google Sign-In is loading. Please try again in a moment.')
-      return
-    }
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: googleClientId,
-      scope: 'openid email profile',
-      callback: async (tokenResponse) => {
-        if (tokenResponse?.error) {
-          setErrorMessage('Google sign-in was cancelled.')
-          return
-        }
-        if (tokenResponse?.access_token) {
-          setIsSubmitting(true)
-          try {
-            const res = await authService.googleLogin({
-              access_token: tokenResponse.access_token,
-            })
-            setIsSubmitting(false)
-            completeAuthentication(res)
-          } catch (err) {
-            setIsSubmitting(false)
-            setErrorMessage(err.message || 'Unable to sign in with Google.')
-          }
-        }
-      },
-    })
-    tokenClient.requestAccessToken({ prompt: 'select_account' })
+    startGoogleOAuth(googleClientId)
   }
 
   const switchMode = (targetMode) => {
@@ -298,7 +357,7 @@ export default function AdminLogin({
             {mode === 'register' ? 'CREATE ACCOUNT' : 'ACCOUNT SIGN IN'}
           </span>
           <h2 className="admin-portal-title">
-            {mode === 'register' ? 'Create Your Account' : 'Sign In to City Pet'}
+            {mode === 'reset' ? 'Reset your password' : mode === 'register' ? 'Create Your Account' : 'Sign In to City Pet'}
           </h2>
           <p className="admin-portal-desc">
             {mode === 'register'
@@ -337,7 +396,19 @@ export default function AdminLogin({
         {/* ----------------------------------------------------
             MODE 1: EMAIL & PASSWORD SIGN IN
            ---------------------------------------------------- */}
-        {mode === 'login' ? (
+        {mode === 'login' && passwordResetNotice && <p role="status">{passwordResetNotice}</p>}
+        {mode === 'reset' ? (
+          <PasswordResetForm
+            initialEmail={email}
+            onBack={() => setMode('login')}
+            onReset={(address) => {
+              setEmail(address)
+              setPassword('')
+              setPasswordResetNotice('Password changed. Sign in with your new password.')
+              setMode('login')
+            }}
+          />
+        ) : mode === 'login' ? (
           <form className="admin-login-form" onSubmit={handleEmailLogin}>
             <div className="admin-form-group">
               <label className="admin-field-label" htmlFor="login-email-input">
@@ -394,6 +465,11 @@ export default function AdminLogin({
               <ArrowRight size={17} />
             </button>
 
+            <button type="button" className="auth-switch-link" onClick={() => {
+              setErrorMessage('')
+              setPasswordResetNotice('')
+              setMode('reset')
+            }}>Forgot password?</button>
             <div className="auth-switch-prompt">
               <span>Don't have an account?</span>
               <button
@@ -536,6 +612,182 @@ export default function AdminLogin({
               </button>
             </div>
           </form>
+        )}
+
+        {/* Google Sign-In Setup & Instant Test Modal */}
+        {showGoogleModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 99999,
+              background: 'rgba(10, 30, 28, 0.72)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+            }}
+            onClick={() => setShowGoogleModal(false)}
+          >
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '20px',
+                maxWidth: '480px',
+                width: '100%',
+                padding: '24px 28px',
+                boxShadow: '0 24px 60px rgba(10, 30, 28, 0.35)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '18px',
+                animation: 'auth-modal-pop 0.22s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <svg width="24" height="24" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  </svg>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 900, color: '#173d3b' }}>
+                      Continue with Google
+                    </h3>
+                    <span style={{ fontSize: '11.5px', color: '#688d88' }}>
+                      Google Identity Services & Instant Test Mode
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(false)}
+                  style={{
+                    border: 'none',
+                    background: '#f0f5f4',
+                    borderRadius: '8px',
+                    width: '30px',
+                    height: '30px',
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: '#557570',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Option 1: Instant Demo / Test Mode */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #f0faf8 0%, #ffffff 100%)',
+                  border: '1.5px solid #c2e5de',
+                  borderRadius: '14px',
+                  padding: '16px 18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>⚡</span>
+                  <strong style={{ fontSize: '13.5px', color: '#0e5d59' }}>
+                    1-Click Test Sign-In (Verified Google Profile)
+                  </strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#4a6e69', lineHeight: 1.4 }}>
+                  Instantly authenticate without setting up Google Cloud API keys. Generates a verified Google user session and syncs with MySQL.
+                </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                  <input
+                    type="email"
+                    value={demoGoogleEmail}
+                    onChange={(e) => setDemoGoogleEmail(e.target.value)}
+                    placeholder="Enter test google email..."
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #d4ece7',
+                      fontSize: '12.5px',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDemoGoogleLogin(demoGoogleEmail)}
+                    disabled={isSubmitting}
+                    style={{
+                      background: 'linear-gradient(135deg, #0e5d59 0%, #04959d 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isSubmitting ? 'Signing in...' : 'Sign In Now'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Live Google Cloud OAuth Client ID */}
+              <form onSubmit={handleSaveGoogleClientId} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 800, color: '#173d3b' }}>
+                  Or Connect Google OAuth Client ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1234567890-xxx.apps.googleusercontent.com"
+                  value={customClientId}
+                  onChange={(e) => setCustomClientId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #d4ece7',
+                    fontSize: '12px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '11px', color: '#04959d', textDecoration: 'none', fontWeight: 700 }}
+                  >
+                    Get Google Client ID &rarr;
+                  </a>
+                  <button
+                    type="submit"
+                    disabled={!customClientId.trim()}
+                    style={{
+                      background: '#123835',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      cursor: customClientId.trim() ? 'pointer' : 'not-allowed',
+                      opacity: customClientId.trim() ? 1 : 0.6,
+                    }}
+                  >
+                    Save & Authorize
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     </div>

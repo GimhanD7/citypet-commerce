@@ -280,3 +280,17 @@ CREATE TABLE IF NOT EXISTS registered_product_reviews (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    user_id VARCHAR(64) PRIMARY KEY,
+    code_hash VARCHAR(255) NOT NULL,
+    requested_at BIGINT UNSIGNED NOT NULL,
+    expires_at BIGINT UNSIGNED NOT NULL,
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    ready TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS hospital_portal_settings (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    settings_json JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

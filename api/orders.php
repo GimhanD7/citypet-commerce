@@ -479,45 +479,11 @@ switch ($method) {
         $stmt = $pdo->prepare("UPDATE `orders` SET `status` = ?, `status_type` = ? WHERE `id` = ? OR `order_number` = ?");
         $stmt->execute([$newStatus, $statusType, $orderId, $orderId]);
 
-        // Automated SMS dispatch if requested by admin
-        $smsSent = false;
-        if (!empty($input['sendSms']) && !empty($input['smsMessage'])) {
-            try {
-                $user = currentSessionUser($pdo, false);
-                $stmtOrd = $pdo->prepare("SELECT `phone`, `customer_name`, `order_number` FROM `orders` WHERE `id` = ? OR `order_number` = ? LIMIT 1");
-                $stmtOrd->execute([$orderId, $orderId]);
-                $ordRow = $stmtOrd->fetch();
-                if ($ordRow && !empty($ordRow['phone'])) {
-                    $smsId = 'sms_' . bin2hex(random_bytes(10));
-                    $stmtSmsIns = $pdo->prepare("
-                        INSERT INTO `sms_logs` (
-                            `id`, `order_id`, `order_number`, `recipient_phone`,
-                            `recipient_name`, `message`, `status`, `template_type`, `sent_by`
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmtSmsIns->execute([
-                        $smsId,
-                        $orderId,
-                        $ordRow['order_number'] ?? $orderId,
-                        $ordRow['phone'],
-                        $ordRow['customer_name'] ?? 'Customer',
-                        trim((string)$input['smsMessage']),
-                        'sent',
-                        $statusType,
-                        $user['name'] ?? 'Admin Staff'
-                    ]);
-                    $smsSent = true;
-                }
-            } catch (\Throwable $t) {
-                // Ignore auto-sms failure
-            }
-        }
-
         jsonResponse([
             'updated' => true,
             'orderId' => $orderId,
             'status' => $newStatus,
-            'smsSent' => $smsSent
+            'smsSent' => false
         ], 200, 'Order status updated');
         break;
 
