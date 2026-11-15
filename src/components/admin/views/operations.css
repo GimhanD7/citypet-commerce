@@ -92,7 +92,7 @@
   border: 0;
 }
 
-.product-import-dialog {
+.apm-card.product-import-dialog {
   width: min(720px, calc(100% - 2rem));
   max-height: calc(100dvh - 2rem);
   margin: auto;

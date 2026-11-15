@@ -156,6 +156,9 @@ export async function readProductWorkbook(buffer, categories) {
       const petType = normalized(d['Pet Type'])
       if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(id)) throw new Error('SKU must have up to 80 letters, numbers, hyphens or underscores and begin with a letter or number.')
       if (products.has(id)) throw new Error('duplicate SKU ' + id + '.')
+      for (const [field, limit] of Object.entries({ Name: 255, 'Full Name': 255, Brand: 100, Badge: 80, Tag: 80 })) {
+        if ([...(d[field] || '')].length > limit) throw new Error(field + ' must have at most ' + limit + ' characters.')
+      }
       if (!categoryIds.has(d['Category ID'])) throw new Error('unknown Category ID. See the Categories sheet.')
       if (!['dogs', 'cats', 'small-pets', 'birds'].includes(petType)) throw new Error('Pet Type must be dogs, cats, small-pets or birds.')
       const payload = {

@@ -131,6 +131,16 @@ export const productService = {
     }
   },
 
+  async getAllProducts() {
+    const products = []
+    while (true) {
+      const page = await apiFetch(`products.php?limit=100&offset=${products.length}`)
+      if (!Array.isArray(page?.products)) throw new Error('Invalid catalog response.')
+      products.push(...page.products)
+      if (!page.products.length || products.length >= page.total) return products
+    }
+  },
+
   /**
    * Get Single Product Details by ID
    */

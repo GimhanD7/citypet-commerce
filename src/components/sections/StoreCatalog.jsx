@@ -48,7 +48,7 @@ export default function StoreCatalog({
     async function fetchCatalog() {
       setLoading(true)
       try {
-        const data = await productService.getProducts()
+        const data = await productService.getAllProducts()
         if (mounted) {
           setProductsList(Array.isArray(data) ? data : [])
         }

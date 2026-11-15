@@ -188,11 +188,8 @@ export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
     let mounted = true
     async function fetchProducts() {
       try {
-        const data = await productService.getProducts()
-        if (mounted && data) {
-          const list = Array.isArray(data) ? data : data.products || []
-          setAdminProducts(list)
-        }
+        const products = await productService.getAllProducts()
+        if (mounted) setAdminProducts(products)
       } catch (err) {
         console.warn('Failed to load products for admin:', err)
       }
