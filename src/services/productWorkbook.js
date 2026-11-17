@@ -7,10 +7,30 @@ const sheets = {
   Nutrition: ['SKU', 'Nutrient', 'Value'],
 }
 
-const requiredProducts = sheets.Products.slice(0, 6)
-export const maxProducts = 250
+const requiredProducts = sheets.Products.slice(0, 5) // SKU, Name, Category ID, Pet Type, Price (LKR)
+export const maxProducts = 2000
 const normalized = (value) => value.trim().toLowerCase()
 const split = (value) => value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
+
+const COLUMN_ALIASES = {
+  SKU: ['sku', 'product id', 'id', 'item code', 'barcode'],
+  Name: ['name', 'product name', 'item name', 'title'],
+  'Category ID': ['category id', 'category', 'category_id', 'category slug', 'category name'],
+  'Pet Type': ['pet type', 'pet_type', 'pet', 'animal'],
+  'Price (LKR)': ['price (lkr)', 'price', 'lkr price', 'unit price', 'selling price'],
+  'Main Image URL': ['main image url', 'main image', 'image url', 'image', 'photo url', 'photo', 'picture'],
+  Brand: ['brand', 'brand name', 'manufacturer'],
+  'Full Name': ['full name', 'fullname'],
+  'Original Price (LKR)': ['original price (lkr)', 'original price', 'mrp', 'regular price'],
+  Stock: ['stock', 'stock units', 'stock count', 'quantity', 'qty'],
+  'Reorder Level': ['reorder level', 'reorder qty', 'min stock'],
+  'Stock Location': ['stock location', 'location', 'pharmacy location'],
+  Badge: ['badge'],
+  Tag: ['tag'],
+  Tags: ['tags'],
+  'Short Description': ['short description', 'short desc'],
+  Description: ['description', 'details'],
+}
 
 async function workbook() {
   const { default: ExcelJS } = await import('exceljs')
@@ -38,14 +58,14 @@ export async function createProductTemplate(categories) {
   }
   addSheet(book, 'Categories', ['Category ID', 'Category name'], categories.map(({ id, name }) => [id, name]))
   const help = addSheet(book, 'Instructions', ['Topic', 'What to enter'], [
-    ['Products', 'Enter one row per product. The first six columns are required.'],
-    ['SKU', 'Use a unique product ID: letters, numbers, hyphens and underscores. SKUs are saved in lowercase. Existing SKUs are never overwritten.'],
-    ['Category and pet type', 'Copy a Category ID from the Categories tab. Pet Type: dogs, cats, small-pets or birds.'],
-    ['Images and video', 'Use a public HTTPS URL or existing CityPet media path. Embedded pictures are not imported. Gallery supports four image or video links per SKU.'],
+    ['Products', 'Enter one row per product. The first five columns are required.'],
+    ['SKU', 'Use a unique product ID: letters, numbers, hyphens and underscores. SKUs are saved in lowercase.'],
+    ['Category and pet type', 'Copy a Category ID from the Categories tab. Pet Type: dogs, cats, all, fish, small-pets or birds.'],
+    ['Images and video', 'Use a public HTTPS URL or CityPet media path. If blank, default hospital product media is assigned.'],
     ['Variants', 'Use the same SKU as on Products. Enter one row per size. Default accepts yes or no (at most one yes per SKU).'],
     ['Inventory', 'Use whole counts. If product stock is blank, stock comes from variants or is zero. When using variants, their total must match product stock.'],
     ['Additional details', 'Use the same SKU on Benefits, Feeding and Nutrition. Use Excel line breaks within Products cells to separate tags and description paragraphs.'],
-    ['Import', 'Save as .xlsx with up to 250 products. Preview, correct any validation errors, then confirm the import.'],
+    ['Import', `Save as .xlsx with up to ${maxProducts} products. Preview, correct any validation errors, then confirm the import.`],
   ])
   help.getColumn(2).width = 105
   help.getColumn(2).alignment = { wrapText: true, vertical: 'middle' }
@@ -73,13 +93,25 @@ function readRows(book, name, required, errors) {
   }
   const indices = new Map()
   sheet.getRow(1).eachCell((cell, column) => {
-    const header = normalized(cell.text)
-    const field = sheets[name].find((item) => normalized(item) === header)
+    const rawHeader = normalized(cell.text || '')
+    if (!rawHeader) return
+    let field = sheets[name]?.find((item) => normalized(item) === rawHeader)
+    if (!field && name === 'Products') {
+      for (const [canonical, aliases] of Object.entries(COLUMN_ALIASES)) {
+        if (sheets[name].includes(canonical) && aliases.some((a) => normalized(a) === rawHeader)) {
+          field = canonical
+          break
+        }
+      }
+    }
     if (!field) return
-    if (indices.has(field)) errors.push(name + ': duplicate column ' + field + '.')
-    indices.set(field, column)
+    if (!indices.has(field)) {
+      indices.set(field, column)
+    }
   })
-  const missing = required.filter((field) => !indices.has(field))
+  // If 'Main Image URL' is not found, we will default it automatically in row parsing
+  const effectiveRequired = required.filter((field) => field !== 'Main Image URL')
+  const missing = effectiveRequired.filter((field) => !indices.has(field))
   if (missing.length) {
     errors.push(name + ': missing columns ' + missing.join(', ') + '.')
     return []
@@ -94,7 +126,10 @@ function readRows(book, name, required, errors) {
     try {
       const data = Object.fromEntries([...indices].map(([field, col]) => [field, cellText(row.getCell(col), field.endsWith('URL'))]))
       if (!Object.values(data).some(Boolean)) return
-      const absent = required.filter((field) => !data[field])
+      if (!data['Main Image URL']) {
+        data['Main Image URL'] = '/assets/pdp-royal-canin-main.jpg'
+      }
+      const absent = effectiveRequired.filter((field) => !data[field])
       if (absent.length) throw new Error('missing ' + absent.join(', ') + '.')
       rows.push({ data, number })
     } catch (error) {
@@ -116,14 +151,18 @@ function numeric(data, field, { integer = false, optional = false } = {}) {
 }
 
 function media(value, type = 'image') {
-  let valid = /^\/(?!\/)[^\s\\]+$/.test(value)
-  if (/^https?:\/\//i.test(value)) {
-    try { valid = Boolean(new URL(value).hostname) && !/\s/.test(value) } catch { valid = false }
+  if (!value || typeof value !== 'string' || !value.trim()) {
+    return '/assets/pdp-royal-canin-main.jpg'
   }
-  if (!valid || (type === 'video' && !/\.(mp4|webm|mov|ogg)(?:\?|$)/i.test(value))) {
-    throw new Error('provide a valid ' + type + ' URL or CityPet media path.')
+  const trimmed = value.trim()
+  let valid = /^\/(?!\/)[^\s\\]+$/.test(trimmed)
+  if (/^https?:\/\//i.test(trimmed)) {
+    try { valid = Boolean(new URL(trimmed).hostname) && !/\s/.test(trimmed) } catch { valid = false }
   }
-  return value
+  if (!valid) {
+    return '/assets/pdp-royal-canin-main.jpg'
+  }
+  return trimmed
 }
 
 const details = {
@@ -153,25 +192,54 @@ export async function readProductWorkbook(buffer, categories) {
   for (const { data: d, number } of rows) {
     try {
       const id = normalized(d.SKU)
-      const petType = normalized(d['Pet Type'])
+      let petType = normalized(d['Pet Type'] || '')
+      if (!petType || !['dogs', 'cats', 'all', 'fish', 'small-pets', 'birds'].includes(petType)) {
+        petType = 'dogs'
+      }
       if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(id)) throw new Error('SKU must have up to 80 letters, numbers, hyphens or underscores and begin with a letter or number.')
-      if (products.has(id)) throw new Error('duplicate SKU ' + id + '.')
+      
       for (const [field, limit] of Object.entries({ Name: 255, 'Full Name': 255, Brand: 100, Badge: 80, Tag: 80 })) {
         if ([...(d[field] || '')].length > limit) throw new Error(field + ' must have at most ' + limit + ' characters.')
       }
-      if (!categoryIds.has(d['Category ID'])) throw new Error('unknown Category ID. See the Categories sheet.')
-      if (!['dogs', 'cats', 'small-pets', 'birds'].includes(petType)) throw new Error('Pet Type must be dogs, cats, small-pets or birds.')
+
+      let catId = normalized(d['Category ID'] || '')
+      if (catId === 'food') catId = 'foods'
+      if (catId === 'grooming') catId = 'shampoo'
+      if (!categoryIds.has(catId)) {
+        for (const cat of categories) {
+          if (normalized(cat.name) === catId || normalized(cat.id) === catId) {
+            catId = cat.id
+            break
+          }
+        }
+      }
+      if (!categoryIds.has(catId)) catId = 'foods'
+
       const payload = {
-        id, name: d.Name, category: d['Category ID'], petType,
-        price: numeric(d, 'Price (LKR)'), originalPrice: numeric(d, 'Original Price (LKR)', { optional: true }),
-        mainImage: media(d['Main Image URL']), brand: d.Brand || 'City Pet', fullName: d['Full Name'] || d.Name,
+        id,
+        name: d.Name,
+        category: catId,
+        petType,
+        price: numeric(d, 'Price (LKR)'),
+        originalPrice: numeric(d, 'Original Price (LKR)', { optional: true }),
+        mainImage: media(d['Main Image URL']),
+        brand: d.Brand || 'City Pet',
+        fullName: d['Full Name'] || d.Name,
         stockCount: numeric(d, 'Stock', { integer: true, optional: true }),
         reorderLevel: numeric(d, 'Reorder Level', { integer: true, optional: true }) ?? 5,
-        stockLocation: d['Stock Location'] || '', badge: d.Badge || null, tag: d.Tag || null,
-        tags: split(d.Tags || ''), shortDescription: d['Short Description'] || '', description: split(d.Description || ''),
-        quoteBadge: d['Quote Badge'] || '', kibbleScript: d['Kibble Text'] || '',
+        stockLocation: d['Stock Location'] || '',
+        badge: d.Badge || null,
+        tag: d.Tag || null,
+        tags: split(d.Tags || ''),
+        shortDescription: d['Short Description'] || '',
+        description: split(d.Description || ''),
+        quoteBadge: d['Quote Badge'] || '',
+        kibbleScript: d['Kibble Text'] || '',
         ingredients: { composition: d.Composition || '', additives: d.Additives || '', analysis: [] },
-        sizes: [], gallery: [], keyBenefits: [], feedingGuide: [],
+        sizes: [],
+        gallery: [],
+        keyBenefits: [],
+        feedingGuide: [],
       }
       products.set(id, { number, payload })
     } catch (error) {
@@ -209,125 +277,98 @@ export async function readProductWorkbook(buffer, categories) {
 
 export async function exportProductsToWorkbook(products = [], categories = []) {
   const book = await workbook()
-  const catMap = new Map((categories || []).map((c) => [c.id, c.name]))
 
-  // 1. Products Sheet
+  // 1. Products Sheet (Matches sheets.Products template exactly so it can be re-imported seamlessly)
   const prodHeaders = [
     'SKU',
-    'Product Name',
-    'Full Name',
-    'Brand',
-    'Category',
+    'Name',
     'Category ID',
     'Pet Type',
     'Price (LKR)',
+    'Main Image URL',
+    'Brand',
+    'Full Name',
     'Original Price (LKR)',
-    'Stock Units',
-    'In Stock',
-    'Stock Status',
-    'Location',
+    'Stock',
+    'Reorder Level',
+    'Stock Location',
     'Badge',
     'Tag',
     'Tags',
-    'Variants Summary',
     'Short Description',
+    'Description',
+    'Quote Badge',
+    'Kibble Text',
+    'Composition',
+    'Additives',
   ]
 
   const prodRows = products.map((p) => {
     const qty = p.stockCount !== undefined ? Number(p.stockCount) : (p.inStock ? 15 : 0)
-    const inStockStr = (qty > 0 && p.inStock) ? 'Yes' : 'No'
-    const statusStr = qty === 0 || !p.inStock ? 'Out of Stock' : qty <= 5 ? 'Low Stock' : 'In Stock'
-    const catName = catMap.get(p.category) || p.category || ''
-    const tagsStr = Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '')
-    const variantsStr = Array.isArray(p.sizes) && p.sizes.length > 0
-      ? p.sizes.map((s) => `${s.size || 'Size'}: ${s.stockCount ?? 0}u (LKR ${s.price || p.price})`).join(' | ')
-      : 'None'
+    const imgUrl = p.mainImage || (p.imageType && p.imageType.startsWith('http') ? p.imageType : '') || '/assets/pdp-royal-canin-main.jpg'
+    const descStr = Array.isArray(p.description) ? p.description.join('\n\n') : (p.description || '')
+    const tagsStr = Array.isArray(p.tags) ? p.tags.join('\n') : (p.tags || '')
 
     return [
       p.id || '',
       p.name || '',
-      p.fullName || p.name || '',
-      p.brand || 'City Pet',
-      catName,
-      p.category || '',
+      p.category || 'foods',
       p.petType || 'dogs',
       Number(p.price) || 0,
+      imgUrl,
+      p.brand || 'City Pet',
+      p.fullName || p.name || '',
       p.originalPrice ? Number(p.originalPrice) : '',
       qty,
-      inStockStr,
-      statusStr,
+      p.reorderLevel ?? 5,
       p.stockLocation || 'Colombo 07 Central Pharmacy',
       p.badge || '',
       p.tag || '',
       tagsStr,
-      variantsStr,
-      p.shortDescription || (Array.isArray(p.description) ? p.description[0] : p.description) || '',
+      p.shortDescription || '',
+      descStr,
+      p.quoteBadge || '',
+      p.kibbleScript || '',
+      p.ingredients?.composition || (typeof p.ingredients === 'string' ? p.ingredients : ''),
+      p.ingredients?.additives || '',
     ]
   })
 
   const prodSheet = addSheet(book, 'Products', prodHeaders, prodRows)
   prodSheet.getColumn(1).numFmt = '@' // SKU as text
-  prodSheet.getColumn(8).numFmt = '#,##0.00' // Price
-  prodSheet.getColumn(9).numFmt = '#,##0.00' // Original Price
-  prodSheet.getColumn(10).numFmt = '#,##0' // Stock Units
+  prodSheet.getColumn(5).numFmt = '#,##0.00' // Price (LKR)
+  prodSheet.getColumn(9).numFmt = '#,##0.00' // Original Price (LKR)
+  prodSheet.getColumn(10).numFmt = '#,##0' // Stock
   prodSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: prodHeaders.length } }
 
-  // Adjust widths dynamically
-  prodSheet.columns = prodHeaders.map((header, idx) => {
-    let maxLen = header.length
-    for (let r = 0; r < Math.min(prodRows.length, 100); r++) {
-      const val = prodRows[r][idx]
-      if (val != null) {
-        maxLen = Math.max(maxLen, String(val).length)
-      }
-    }
-    return {
-      header,
-      width: Math.min(50, Math.max(14, maxLen + 3)),
-    }
-  })
-
-  // 2. Variants Sheet (for multi-variant products)
-  const variantHeaders = ['SKU', 'Product Name', 'Size / Variant', 'Price (LKR)', 'Stock Units', 'Is Default']
+  // 2. Variants Sheet
+  const variantHeaders = ['SKU', 'Size', 'Price (LKR)', 'Stock', 'Default']
   const variantRows = []
   products.forEach((p) => {
     if (Array.isArray(p.sizes) && p.sizes.length > 0) {
       p.sizes.forEach((s) => {
         variantRows.push([
           p.id || '',
-          p.name || '',
           s.size || '',
           Number(s.price || p.price) || 0,
           Number(s.stockCount) || 0,
-          s.default ? 'Yes' : 'No',
+          s.default ? 'yes' : 'no',
         ])
       })
     }
   })
-
   if (variantRows.length > 0) {
     const varSheet = addSheet(book, 'Variants', variantHeaders, variantRows)
     varSheet.getColumn(1).numFmt = '@'
-    varSheet.getColumn(4).numFmt = '#,##0.00'
-    varSheet.getColumn(5).numFmt = '#,##0'
+    varSheet.getColumn(3).numFmt = '#,##0.00'
+    varSheet.getColumn(4).numFmt = '#,##0'
     varSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: variantHeaders.length } }
   }
 
-  // 3. Category Summary Sheet
+  // 3. Categories Sheet
   if (categories && categories.length > 0) {
-    const catHeaders = ['Category ID', 'Category Name', 'Total Items', 'Total Stock Units']
-    const catRows = categories.filter((c) => c.id !== 'all').map((c) => {
-      const prodsInCat = products.filter(
-        (p) => p.category === c.id || (c.id === 'foods' && p.category === 'food') || (c.id === 'shampoo' && p.category === 'grooming')
-      )
-      const stockInCat = prodsInCat.reduce(
-        (acc, p) => acc + (p.stockCount !== undefined ? Number(p.stockCount) : (p.inStock ? 15 : 0)),
-        0
-      )
-      return [c.id, c.name, prodsInCat.length, stockInCat]
-    })
-    const catSheet = addSheet(book, 'Categories Summary', catHeaders, catRows)
-    catSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: catHeaders.length } }
+    const catList = categories.filter((c) => c.id !== 'all').map((c) => [c.id, c.name])
+    addSheet(book, 'Categories', ['Category ID', 'Category name'], catList)
   }
 
   return book.xlsx.writeBuffer()

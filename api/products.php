@@ -218,6 +218,20 @@ switch ($method) {
                 `price`, `original_price`, `rating`, `reviews_count`, `badge`, `tag`,
                 `in_stock`, `image_type`, `short_description`, `tags_json`
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                `name` = VALUES(`name`),
+                `full_name` = VALUES(`full_name`),
+                `brand` = VALUES(`brand`),
+                `category_id` = VALUES(`category_id`),
+                `pet_type` = VALUES(`pet_type`),
+                `price` = VALUES(`price`),
+                `original_price` = VALUES(`original_price`),
+                `badge` = VALUES(`badge`),
+                `tag` = VALUES(`tag`),
+                `in_stock` = VALUES(`in_stock`),
+                `image_type` = VALUES(`image_type`),
+                `short_description` = VALUES(`short_description`),
+                `tags_json` = VALUES(`tags_json`)
         ");
 
         $stmt->execute([
