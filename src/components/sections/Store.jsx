@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import StoreHero from './StoreHero'
-import StoreCategories from './StoreCategories'
 import StoreProducts from './StoreProducts'
 import StoreVetBanner from './StoreVetBanner'
 import StoreTrustBadges from './StoreTrustBadges'
@@ -25,15 +24,6 @@ export default function Store({
     if (onNavigateToCatalog) {
       onNavigateToCatalog({ category: 'all' })
     } else {
-      scrollToSection('store-categories')
-    }
-  }
-
-  const handleViewAllCategories = (catId) => {
-    if (onNavigateToCatalog) {
-      onNavigateToCatalog({ category: catId || 'all' })
-    } else {
-      setSelectedCategory(catId || 'all')
       scrollToSection('store-products')
     }
   }
@@ -58,16 +48,6 @@ export default function Store({
           }
         }}
         onBrowseCategories={handleBrowseCategories}
-      />
-
-      {/* Categories Bar */}
-      <StoreCategories
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => {
-          setSelectedCategory(cat)
-          scrollToSection('store-products')
-        }}
-        onViewAllCategories={handleViewAllCategories}
       />
 
       {/* Featured / Popular Products */}
