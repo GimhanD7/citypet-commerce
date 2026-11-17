@@ -62,7 +62,7 @@ export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
   const [productForm, setProductForm] = useState({
     name: '',
     brand: 'City Pet',
-    category: 'food',
+    category: 'foods',
     petType: 'dogs',
     price: '',
     originalPrice: '',
@@ -227,7 +227,7 @@ export default function AdminDashboard({ onNavigate, onLogout, authUser }) {
     setProductForm({
       name: '',
       brand: 'City Pet',
-      category: 'food',
+      category: 'foods',
       petType: 'dogs',
       price: '',
       originalPrice: '',

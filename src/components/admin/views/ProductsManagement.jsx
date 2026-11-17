@@ -49,10 +49,12 @@ function stockState(qty) {
 }
 
 const CATEGORY_LABELS = {
-  food: 'Pet Food',
-  healthcare: 'Healthcare',
-  grooming: 'Grooming',
+  foods: 'Foods & Treats',
+  food: 'Foods & Treats',
+  shampoo: 'Shampoo & Grooming',
+  grooming: 'Shampoo & Grooming',
   accessories: 'Accessories',
+  healthcare: 'Healthcare & Pharmacy',
   treats: 'Treats',
   toys: 'Toys',
 }
@@ -334,7 +336,11 @@ export default function ProductsManagement({
       (p.brand && p.brand.toLowerCase().includes(q)) ||
       (p.id && p.id.toLowerCase().includes(q)) ||
       (p.stockLocation && p.stockLocation.toLowerCase().includes(q))
-    const matchCat   = productCategoryFilter === 'all' || p.category === productCategoryFilter
+    const matchCat =
+      productCategoryFilter === 'all' ||
+      p.category === productCategoryFilter ||
+      (productCategoryFilter === 'foods' && (p.category === 'food' || p.category === 'foods')) ||
+      (productCategoryFilter === 'shampoo' && (p.category === 'grooming' || p.category === 'shampoo'))
     const matchStock =
       stockStatusFilter === 'all'          ? true :
       stockStatusFilter === 'in_stock'     ? qty > 5 && p.inStock :
@@ -435,12 +441,10 @@ export default function ProductsManagement({
             className="pm-filter-select"
           >
             <option value="all">All Categories</option>
-            <option value="food">Pet Food</option>
-            <option value="healthcare">Healthcare &amp; Pharma</option>
-            <option value="grooming">Grooming</option>
+            <option value="foods">Foods &amp; Treats</option>
+            <option value="shampoo">Shampoo &amp; Grooming</option>
             <option value="accessories">Accessories</option>
-            <option value="treats">Treats</option>
-            <option value="toys">Toys</option>
+            <option value="healthcare">Healthcare &amp; Pharmacy</option>
           </select>
         </div>
 

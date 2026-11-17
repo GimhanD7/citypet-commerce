@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { categoryService } from '../../../services/api'
+import { storeCategories } from '../../../data/storeData'
 import ProductMediaFields from './ProductMediaFields'
 import {
   BookOpen,
@@ -29,8 +30,8 @@ export default function AddProductModal({
 }) {
   const [activeTab, setActiveTab] = useState('description')
   const [uploading, setUploading] = useState(false)
-  const [categories, setCategories] = useState([])
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categories, setCategories] = useState(() => storeCategories.filter((c) => c.id !== 'all'))
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
   const [categoriesError, setCategoriesError] = useState('')
   const [categoryLoadAttempt, setCategoryLoadAttempt] = useState(0)
 
@@ -40,16 +41,12 @@ export default function AddProductModal({
     setCategoriesError('')
     async function loadCategories() {
       try {
-        const data = await categoryService.getCategories({ allowFallback: false })
-        if (!Array.isArray(data?.categories)) {
-          throw new Error('Invalid categories response')
+        const data = await categoryService.getCategories({ allowFallback: true })
+        if (mounted && Array.isArray(data?.categories) && data.categories.length > 0) {
+          setCategories(data.categories.filter((c) => c.id !== 'all'))
         }
-        if (mounted) setCategories(data.categories)
       } catch (err) {
-        if (mounted) {
-          setCategories([])
-          setCategoriesError('Unable to load categories. Please try again.')
-        }
+        console.warn('Unable to load categories from API, using fallback:', err)
       } finally {
         if (mounted) setCategoriesLoading(false)
       }

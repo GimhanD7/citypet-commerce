@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Download, FileSpreadsheet, X } from 'lucide-react'
 import { categoryService, productService } from '../../../services/api'
+import { storeCategories } from '../../../data/storeData'
 import { createProductTemplate, maxProducts, readProductWorkbook } from '../../../services/productWorkbook'
 
 export default function ImportProductsModal({ onClose, onImported }) {
@@ -22,11 +23,13 @@ export default function ImportProductsModal({ onClose, onImported }) {
 
   useEffect(() => {
     let active = true
-    categoryService.getCategories({ allowFallback: false }).then((data) => {
-      if (!data?.categories?.length) throw new Error('Create at least one product category first.')
-      if (active) setCategories(data.categories)
-    }).catch((err) => {
-      if (active) setCategoryError(err.message || 'Unable to load product categories.')
+    categoryService.getCategories({ allowFallback: true }).then((data) => {
+      const cats = Array.isArray(data?.categories) && data.categories.length > 0
+        ? data.categories.filter((c) => c.id !== 'all')
+        : storeCategories.filter((c) => c.id !== 'all')
+      if (active) setCategories(cats)
+    }).catch(() => {
+      if (active) setCategories(storeCategories.filter((c) => c.id !== 'all'))
     })
     return () => { active = false }
   }, [])

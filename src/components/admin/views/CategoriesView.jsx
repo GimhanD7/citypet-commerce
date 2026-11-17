@@ -13,6 +13,7 @@ import {
 
 import { categoryService } from '../../../services/api'
 import { apiFetch } from '../../../config/api'
+import { storeCategories } from '../../../data/storeData'
 
 // ─── Default data ──────────────────────────────────────────────────────────────
 
@@ -233,8 +234,26 @@ function CategoryCard({ cat, productCount, onEdit, onDelete }) {
 // ─── Main View ─────────────────────────────────────────────────────────────────
 
 export default function CategoriesView({ adminProducts = [], showToast }) {
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState(() =>
+    storeCategories
+      .filter((c) => c.id !== 'all')
+      .map((category) => {
+        const liveCount =
+          category.count !== undefined
+            ? Number(category.count)
+            : adminProducts.filter((p) => p.category === category.id).length
+        return {
+          ...category,
+          slug: category.id,
+          emoji: category.emoji ?? category.icon ?? '📦',
+          color: category.color ?? category.bg ?? '#eefaf7',
+          accent: '#0e5d59',
+          count: liveCount,
+          description: '',
+        }
+      })
+  )
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch]         = useState('')
@@ -246,7 +265,17 @@ export default function CategoriesView({ adminProducts = [], showToast }) {
     c.slug.toLowerCase().includes(search.toLowerCase())
   )
 
-  const productCountFor = (category) => Number(category.count || 0)
+  const productCountFor = (category) => {
+    if (category.count !== undefined && category.count !== null && category.count > 0) {
+      return Number(category.count)
+    }
+    return adminProducts.filter(
+      (p) =>
+        p.category === category.id ||
+        (category.id === 'foods' && p.category === 'food') ||
+        (category.id === 'shampoo' && p.category === 'grooming')
+    ).length
+  }
 
   const totalProducts = categories.reduce((total, category) => total + productCountFor(category), 0)
 
@@ -254,17 +283,34 @@ export default function CategoriesView({ adminProducts = [], showToast }) {
     setLoading(true)
     setError('')
     try {
-      const data = await categoryService.getCategories({ allowFallback: false })
-      setCategories(data.categories.map((category) => ({
-        ...category,
-        slug: category.id,
-        emoji: category.emoji ?? category.icon ?? '',
-        color: category.color ?? category.bg ?? '#eefaf7',
-        accent: category.accent || '#0e5d59',
-        description: category.description || '',
-      })))
+      const data = await categoryService.getCategories({ allowFallback: true })
+      if (Array.isArray(data?.categories) && data.categories.length > 0) {
+        const validCats = data.categories.filter((c) => c.id !== 'all')
+        setCategories(
+          validCats.map((category) => {
+            const liveCount =
+              category.count !== undefined
+                ? Number(category.count)
+                : adminProducts.filter(
+                    (p) =>
+                      p.category === category.id ||
+                      (category.id === 'foods' && p.category === 'food') ||
+                      (category.id === 'shampoo' && p.category === 'grooming')
+                  ).length
+            return {
+              ...category,
+              slug: category.id,
+              emoji: category.emoji ?? category.icon ?? '📦',
+              color: category.color ?? category.bg ?? '#eefaf7',
+              accent: category.accent || '#0e5d59',
+              count: liveCount,
+              description: category.description || '',
+            }
+          })
+        )
+      }
     } catch (failure) {
-      setError(failure.message || 'Unable to load categories.')
+      console.warn('Unable to load categories from API, using storeCategories:', failure)
     } finally {
       setLoading(false)
     }
