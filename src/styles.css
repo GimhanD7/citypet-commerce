@@ -494,157 +494,164 @@ img { display: block; max-width: 100%; }
 }
 
 /* ============================================================
-   STORE HERO SECTION (Matches Reference Image)
+   STORE HERO SECTION (Ultra-Modern Minimalist Clean Design)
    ============================================================ */
 .store-hero-section {
   position: relative;
   overflow: hidden;
-  padding: 125px 0 50px;
-  background: linear-gradient(135deg, #e5f7f5 0%, #f4fcfb 55%, #ebf9f7 100%);
+  padding: 128px 0 56px;
+  background: radial-gradient(circle at 18% 22%, #eaf8f5 0%, #f6fcfb 45%, #ffffff 100%);
 }
-.store-hero-soft-orb {
+.store-hero-bg-glow {
   position: absolute;
-  width: 450px;
-  height: 450px;
+  width: 520px;
+  height: 520px;
   border-radius: 50%;
-  background: rgba(178, 237, 232, 0.4);
-  left: -80px;
-  top: -50px;
+  background: radial-gradient(circle, rgba(162, 230, 222, 0.35) 0%, rgba(225, 246, 243, 0) 70%);
+  left: -120px;
+  top: -80px;
   pointer-events: none;
-  filter: blur(50px);
+  filter: blur(60px);
 }
 .store-hero-grid {
   display: grid;
-  grid-template-columns: 1.02fr .98fr;
-  gap: 36px;
+  grid-template-columns: 1.05fr .95fr;
+  gap: 40px;
   align-items: center;
   position: relative;
   z-index: 2;
 }
-.store-hero-eyebrow {
-  display: inline-block;
-  color: #00939b;
+.store-hero-eyebrow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 147, 155, 0.08);
+  border: 1px solid rgba(0, 147, 155, 0.2);
+  color: #057076;
   font-size: 11.5px;
-  font-weight: 900;
-  letter-spacing: .2em;
+  font-weight: 750;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
+}
+.eyebrow-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00a896;
+  box-shadow: 0 0 0 3px rgba(0, 168, 150, 0.25);
+  animation: dotPulse 2.2s infinite;
+}
+.eyebrow-sparkle {
+  color: #00a896;
 }
 .store-hero-title {
-  margin: 0 0 16px;
-  line-height: .98;
+  margin: 0 0 18px;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 .store-title-line {
   display: block;
-  font-family: 'Nunito', sans-serif;
-  font-size: clamp(44px, 4.6vw, 66px);
-  font-weight: 900;
-  color: #123838;
-  letter-spacing: -.045em;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(38px, 4.4vw, 58px);
+  font-weight: 800;
+  color: #0f2d2d;
 }
-.store-title-script-wrap {
+.store-title-gradient {
   display: inline-block;
-  position: relative;
-  margin-top: 6px;
-}
-.store-title-script {
-  display: inline-block;
-  font-family: 'Caveat', cursive;
-  font-size: clamp(62px, 6.2vw, 92px);
-  font-weight: 700;
-  color: #04959d;
-  letter-spacing: -.03em;
-  line-height: .88;
-  position: relative;
-}
-.store-title-script::after {
-  content: '';
-  position: absolute;
-  left: 2%;
-  right: 0;
-  bottom: -4px;
-  height: 5px;
-  border-radius: 999px;
-  background: #04959d;
-  transform: rotate(-1.5deg);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(38px, 4.4vw, 58px);
+  font-weight: 800;
+  background: linear-gradient(135deg, #00877f 0%, #02a393 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .store-hero-desc {
-  font-size: 15.5px;
+  font-size: 16px;
   line-height: 1.68;
-  color: #526f6b;
-  max-width: 480px;
-  margin: 0 0 28px;
+  color: #4b6865;
+  max-width: 500px;
+  margin: 0 0 32px;
+  font-weight: 450;
 }
 .store-hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 32px;
+  margin-bottom: 34px;
 }
 .store-btn-shop-now {
-  background: #075c5e;
-  color: white;
+  background: #065b5c;
+  color: #ffffff;
   min-height: 52px;
-  padding: 0 24px;
+  padding: 0 28px;
   border-radius: 999px;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 14.5px;
+  font-weight: 750;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 10px 25px rgba(7,92,94,.24);
-  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(6, 91, 92, 0.24);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+  cursor: pointer;
 }
 .store-btn-shop-now:hover {
-  background: #044b4d;
+  background: #044647;
   transform: translateY(-2px);
-  box-shadow: 0 14px 28px rgba(7,92,94,.3);
+  box-shadow: 0 12px 28px rgba(6, 91, 92, 0.32);
 }
 .btn-icon-cart { color: white; }
 .btn-icon-arrow { color: white; margin-left: 2px; }
 .store-btn-browse-cat {
-  background: white;
-  color: #0d5c5a;
-  border: 1px solid rgba(13,92,90,.22);
+  background: #ffffff;
+  color: #0b5452;
+  border: 1.5px solid rgba(11, 84, 82, 0.2);
   min-height: 52px;
   padding: 0 24px;
   border-radius: 999px;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 8px 20px rgba(13,92,90,.05);
-  transition: transform .2s ease, background .2s ease;
+  font-size: 14.5px;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s ease;
+  cursor: pointer;
 }
 .store-btn-browse-cat:hover {
-  background: #f8fdfc;
+  background: #f4fbf9;
+  border-color: #0b5452;
   transform: translateY(-2px);
 }
 .store-hero-trust-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(23,61,59,.1);
+  gap: 20px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(15, 45, 45, 0.08);
 }
-.store-trust-item {
+.store-trust-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #385a56;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: #315350;
 }
 .trust-circle-pill {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #d5f3ed;
-  color: #04959d;
+  background: #e1f5f1;
+  color: #00877f;
   flex-shrink: 0;
 }
 
-/* Store Hero Stage Image & Floating Accents */
+/* Store Hero Stage Image & Modern Glass Floating Badges */
 .store-hero-stage {
   position: relative;
   display: flex;
@@ -656,6 +663,75 @@ img { display: block; max-width: 100%; }
   width: 100%;
   max-width: 580px;
 }
+.store-hero-backdrop-circle {
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(162, 230, 222, 0.45) 0%, rgba(225, 246, 243, 0.15) 70%, transparent 100%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+.store-modern-glass-badge {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 10px 16px;
+  box-shadow: 0 12px 30px rgba(11, 46, 43, 0.08), 0 2px 6px rgba(11, 46, 43, 0.04);
+  animation: floatBadge 4s ease-in-out infinite;
+}
+.store-modern-glass-badge.badge-top {
+  top: 14px;
+  right: 6px;
+  animation-delay: 0s;
+}
+.store-modern-glass-badge.badge-bottom {
+  bottom: 20px;
+  left: -12px;
+  animation-delay: 2s;
+}
+.badge-glass-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.badge-glass-icon.gold {
+  background: #fef3c7;
+  color: #d97706;
+}
+.badge-glass-icon.teal {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+.badge-glass-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+.badge-glass-text strong {
+  font-size: 13px;
+  font-weight: 750;
+  color: #0f2d2d;
+  line-height: 1.2;
+}
+.badge-glass-text small {
+  font-size: 11px;
+  color: #5c7976;
+  font-weight: 500;
+}
 .store-hero-image-wrapper {
   background: transparent;
   border: none;
@@ -665,70 +741,24 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  position: relative;
+  z-index: 2;
 }
 .store-hero-img {
   width: 100%;
   height: auto;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 18px 32px rgba(18, 70, 67, 0.14));
+  filter: drop-shadow(0 18px 32px rgba(18, 70, 67, 0.12));
 }
-.store-floating-heart-svg {
-  position: absolute;
-  top: 12px;
-  left: -20px;
-  z-index: 4;
-  transform: rotate(-8deg);
-  animation: heartBob 3.5s ease-in-out infinite;
+
+@keyframes floatBadge {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-7px); }
 }
-.store-floating-speech-egg {
-  position: absolute;
-  top: -16px;
-  right: -15px;
-  z-index: 4;
-  background: #d4f4ed;
-  border: 1px solid rgba(4,149,157,.22);
-  border-radius: 50% 50% 50% 50% / 55% 55% 45% 45%;
-  width: 115px;
-  height: 135px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  box-shadow: 0 14px 30px rgba(22,92,89,.12);
-  backdrop-filter: blur(8px);
-  animation: floatDot 4s ease-in-out infinite;
-}
-.egg-line-1, .egg-line-3 {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: #077974;
-  line-height: 1.1;
-}
-.egg-line-2, .egg-line-4 {
-  font-family: 'Caveat', cursive;
-  font-size: 21px;
-  font-weight: 700;
-  color: #04959d;
-  line-height: .95;
-}
-.store-accent-rays {
-  position: absolute;
-  top: 45px;
-  right: -32px;
-  z-index: 3;
-  display: flex;
-  gap: 4px;
-  transform: rotate(18deg);
-}
-.store-accent-rays span {
-  display: block;
-  width: 12px;
-  height: 3px;
-  background: #62c7bd;
-  border-radius: 999px;
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
 }
 
 
@@ -2053,6 +2083,8 @@ img { display: block; max-width: 100%; }
   .store-hero-actions { justify-content: center; }
   .store-hero-trust-bar { justify-content: center; }
   .store-hero-stage-inner { margin: 0 auto; }
+  .store-modern-glass-badge.badge-top { top: 4px; right: 0; }
+  .store-modern-glass-badge.badge-bottom { bottom: 6px; left: 0; }
   .store-vet-banner-card { grid-template-columns: 1fr; padding: 32px 24px; text-align: center; }
   .store-vet-desc { margin-inline: auto; }
   .store-vet-btn { margin: 0 auto; }
