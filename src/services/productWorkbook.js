@@ -127,7 +127,7 @@ function readRows(book, name, required, errors) {
       const data = Object.fromEntries([...indices].map(([field, col]) => [field, cellText(row.getCell(col), field.endsWith('URL'))]))
       if (!Object.values(data).some(Boolean)) return
       if (!data['Main Image URL']) {
-        data['Main Image URL'] = '/assets/pdp-royal-canin-main.jpg'
+        data['Main Image URL'] = ''
       }
       const absent = effectiveRequired.filter((field) => !data[field])
       if (absent.length) throw new Error('missing ' + absent.join(', ') + '.')
@@ -152,7 +152,7 @@ function numeric(data, field, { integer = false, optional = false } = {}) {
 
 function media(value, type = 'image') {
   if (!value || typeof value !== 'string' || !value.trim()) {
-    return '/assets/pdp-royal-canin-main.jpg'
+    return ''
   }
   const trimmed = value.trim()
   let valid = /^\/(?!\/)[^\s\\]+$/.test(trimmed)
@@ -160,7 +160,7 @@ function media(value, type = 'image') {
     try { valid = Boolean(new URL(trimmed).hostname) && !/\s/.test(trimmed) } catch { valid = false }
   }
   if (!valid) {
-    return '/assets/pdp-royal-canin-main.jpg'
+    return ''
   }
   return trimmed
 }
@@ -305,7 +305,7 @@ export async function exportProductsToWorkbook(products = [], categories = []) {
 
   const prodRows = products.map((p) => {
     const qty = p.stockCount !== undefined ? Number(p.stockCount) : (p.inStock ? 15 : 0)
-    const imgUrl = p.mainImage || (p.imageType && p.imageType.startsWith('http') ? p.imageType : '') || '/assets/pdp-royal-canin-main.jpg'
+    const imgUrl = p.mainImage || (p.imageType && (p.imageType.startsWith('http') || p.imageType.startsWith('/')) ? p.imageType : '') || ''
     const descStr = Array.isArray(p.description) ? p.description.join('\n\n') : (p.description || '')
     const tagsStr = Array.isArray(p.tags) ? p.tags.join('\n') : (p.tags || '')
 
