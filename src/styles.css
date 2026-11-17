@@ -3739,6 +3739,228 @@ img { display: block; max-width: 100%; }
 }
 
 /* ============================================================
+   MODERN CATEGORY VISUALS FOR CITY PET STOCK INVENTORY
+   ============================================================ */
+.pv-shampoo-modern,
+.pv-foods-modern,
+.pv-accessories-modern,
+.pv-healthcare-modern,
+.pv-generic-modern {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.pv-shampoo-bottle {
+  width: 90px;
+  height: 130px;
+  background: linear-gradient(145deg, #e0f2fe 0%, #bae6fd 100%);
+  border: 1.5px solid #7dd3fc;
+  border-radius: 18px 18px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 8px 16px rgba(14, 165, 233, 0.15);
+  transition: transform 0.2s ease;
+}
+.pv-shampoo-bottle:hover {
+  transform: translateY(-2px);
+}
+.pv-shampoo-cap {
+  width: 32px;
+  height: 14px;
+  background: #0284c7;
+  border-radius: 6px 6px 0 0;
+  margin-top: -6px;
+}
+.pv-shampoo-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  text-align: center;
+}
+.pv-shampoo-icon {
+  font-size: 26px;
+}
+.pv-shampoo-brand {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #0369a1;
+  font-weight: 800;
+}
+.pv-shampoo-text {
+  font-size: 8.5px;
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+.pv-foods-pack {
+  width: 95px;
+  height: 130px;
+  background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1.5px solid #fde68a;
+  border-radius: 12px 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.15);
+  padding: 8px 4px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease;
+}
+.pv-foods-pack:hover {
+  transform: translateY(-2px);
+}
+.pv-foods-badge {
+  font-size: 8px;
+  font-weight: 800;
+  color: #b45309;
+  letter-spacing: 0.08em;
+  background: #fde68a;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.pv-foods-center {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+.pv-foods-icon {
+  font-size: 30px;
+}
+.pv-foods-footer {
+  text-align: center;
+}
+.pv-foods-title {
+  font-size: 9px;
+  color: #92400e;
+  font-weight: 800;
+}
+
+.pv-acc-card {
+  width: 100px;
+  height: 125px;
+  background: linear-gradient(145deg, #f0fdfa 0%, #ccfbf1 100%);
+  border: 1.5px solid #99f6e4;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 8px 16px rgba(20, 184, 166, 0.15);
+  padding: 8px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease;
+}
+.pv-acc-card:hover {
+  transform: translateY(-2px);
+}
+.pv-acc-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.12);
+}
+.pv-acc-icon {
+  font-size: 24px;
+}
+.pv-acc-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #0f766e;
+}
+.pv-acc-sub {
+  font-size: 8px;
+  color: #115e59;
+  font-weight: 600;
+}
+
+.pv-health-box {
+  width: 95px;
+  height: 125px;
+  background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #bbf7d0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-shadow: 0 8px 16px rgba(34, 197, 94, 0.15);
+  padding: 8px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease;
+}
+.pv-health-box:hover {
+  transform: translateY(-2px);
+}
+.pv-health-cross {
+  font-size: 16px;
+  color: #16a34a;
+}
+.pv-health-title {
+  font-size: 9px;
+  color: #15803d;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.pv-health-sub {
+  font-size: 8px;
+  color: #166534;
+}
+.pv-health-pills {
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.pv-generic-modern {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 10px;
+}
+.pv-generic-avatar-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e6f7f5 0%, #c4ece7 100%);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 12px rgba(4, 149, 157, 0.15);
+}
+.pv-generic-emoji {
+  font-size: 24px;
+}
+.pv-generic-category-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #04959d;
+  background: #e6f7f5;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* ============================================================
    RESPONSIVE CATALOG ADJUSTMENTS
    ============================================================ */
 @media (max-width: 1100px) {
@@ -18558,3 +18780,705 @@ img {
 }
 
 .auth-reset-fields .auth-text-input { padding-inline-start: 12px; }
+
+/* ============================================================
+   MODERN MINIMALIST STORE DESIGN & SIMPLIFIED CATEGORIES
+   ============================================================ */
+
+/* ── Simplified Modern Category Cards ── */
+.modern-store-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.modern-cat-card {
+  background: #ffffff;
+  border: 1.5px solid rgba(23, 61, 59, 0.08);
+  border-radius: 18px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 18px rgba(18, 56, 53, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-cat-card:hover {
+  transform: translateY(-4px);
+  border-color: #04959d;
+  box-shadow: 0 14px 28px rgba(4, 149, 157, 0.12);
+}
+
+.modern-cat-card.active {
+  border-color: #04959d;
+  background: #f0faf8;
+  box-shadow: 0 8px 24px rgba(4, 149, 157, 0.16);
+}
+
+.modern-cat-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(18, 56, 53, 0.05);
+}
+
+.modern-cat-emoji {
+  font-size: 24px;
+}
+
+.modern-cat-text-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modern-cat-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #123835;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.modern-cat-desc {
+  font-size: 11.5px;
+  color: #648a85;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.modern-cat-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(23, 61, 59, 0.06);
+}
+
+.modern-cat-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #04959d;
+  background: #e6f7f5;
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.modern-cat-arrow {
+  color: #648a85;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.modern-cat-card:hover .modern-cat-arrow {
+  color: #04959d;
+  transform: translateX(3px);
+}
+
+/* ── Modern Store Products Section ── */
+.modern-store-products-section {
+  padding-top: 36px;
+  padding-bottom: 60px;
+}
+
+.modern-store-header-box {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.modern-store-header-left {
+  max-width: 580px;
+}
+
+.modern-store-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #04959d;
+  background: #e6f7f5;
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
+.modern-store-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: #123835;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+
+.modern-store-subtitle {
+  font-size: 14px;
+  color: #557570;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Search Bar */
+.modern-store-search-bar {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  border: 1.5px solid #d4ece7;
+  border-radius: 30px;
+  padding: 4px 14px;
+  box-shadow: 0 4px 16px rgba(18, 56, 53, 0.04);
+  transition: all 0.2s ease;
+}
+
+.modern-store-search-bar:focus-within {
+  border-color: #04959d;
+  box-shadow: 0 4px 20px rgba(4, 149, 157, 0.14);
+}
+
+.modern-store-search-icon {
+  color: #648a85;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.modern-store-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13.5px;
+  color: #123835;
+  padding: 8px 0;
+  background: transparent;
+}
+
+.modern-store-search-clear {
+  border: none;
+  background: #ebf5f3;
+  color: #648a85;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modern-store-search-clear:hover {
+  background: #123835;
+  color: #ffffff;
+}
+
+/* ── Modern Category Pills Strip ── */
+.modern-cat-pill-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+  scrollbar-width: none;
+}
+
+.modern-cat-pill-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.modern-cat-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  background: #ffffff;
+  border: 1.5px solid #dbece8;
+  border-radius: 25px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #385955;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(18, 56, 53, 0.02);
+}
+
+.modern-cat-pill-btn:hover {
+  border-color: #04959d;
+  color: #04959d;
+  transform: translateY(-1px);
+}
+
+.modern-cat-pill-btn.active {
+  background: #04959d;
+  border-color: #04959d;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(4, 149, 157, 0.28);
+}
+
+.modern-cat-pill-btn .cat-pill-icon {
+  font-size: 16px;
+}
+
+.modern-cat-pill-btn .cat-pill-count {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(23, 61, 59, 0.06);
+  color: inherit;
+}
+
+.modern-cat-pill-btn.active .cat-pill-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* ── Controls Bar ── */
+.modern-store-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: #f7faf9;
+  border-radius: 14px;
+  border: 1px solid #ebf4f1;
+}
+
+.modern-pet-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modern-pet-pill {
+  padding: 6px 14px;
+  border: 1px solid #d0e8e3;
+  background: #ffffff;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #365e5a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modern-pet-pill:hover {
+  border-color: #04959d;
+  color: #04959d;
+}
+
+.modern-pet-pill.active {
+  background: #123835;
+  border-color: #123835;
+  color: #ffffff;
+}
+
+.modern-store-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.modern-store-results-stat {
+  font-size: 13px;
+  color: #638581;
+}
+
+.modern-store-results-stat strong {
+  color: #123835;
+}
+
+.modern-store-sort-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modern-sort-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #638581;
+}
+
+.modern-store-sort-select {
+  padding: 6px 12px;
+  border: 1.5px solid #d0e8e3;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #123835;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Active Chips */
+.modern-active-chips-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.active-chips-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #648a85;
+}
+
+.modern-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #e6f7f5;
+  border: 1px solid #c2ece6;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #04959d;
+}
+
+.modern-filter-chip button {
+  border: none;
+  background: transparent;
+  color: #04959d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.modern-clear-all-chips {
+  border: none;
+  background: transparent;
+  color: #e11d48;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── Modern Product Grid ── */
+.modern-products-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.modern-product-card {
+  background: #ffffff;
+  border: 1.5px solid rgba(23, 61, 59, 0.07);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(18, 56, 53, 0.03);
+  position: relative;
+}
+
+.modern-product-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(4, 149, 157, 0.3);
+  box-shadow: 0 12px 28px rgba(4, 149, 157, 0.1);
+}
+
+.modern-card-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  min-height: 24px;
+}
+
+.modern-brand-tag {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #04959d;
+}
+
+.modern-wishlist-btn {
+  border: none;
+  background: #f4faf9;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modern-wishlist-btn:hover {
+  background: #fee2e2;
+}
+
+.modern-wishlist-btn.liked {
+  background: #fee2e2;
+}
+
+.modern-card-visual-wrap {
+  height: 155px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  margin-bottom: 12px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.modern-card-promo-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: #123835;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.modern-card-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.modern-card-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #123835;
+  margin: 0 0 6px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 36px;
+}
+
+.modern-card-rating {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.modern-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.modern-review-text {
+  font-size: 11px;
+  color: #7b9c97;
+  font-weight: 600;
+}
+
+.modern-card-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  margin-bottom: 12px;
+}
+
+.modern-price-group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.modern-main-price {
+  font-size: 15px;
+  font-weight: 900;
+  color: #123835;
+}
+
+.modern-orig-price {
+  font-size: 11.5px;
+  color: #8faea9;
+  text-decoration: line-through;
+  font-weight: 600;
+}
+
+.modern-stock-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.modern-stock-tag.in {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.modern-stock-tag.out {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.modern-add-btn {
+  width: 100%;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 12px;
+  background: #04959d;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 12px rgba(4, 149, 157, 0.22);
+}
+
+.modern-add-btn:hover:not(:disabled) {
+  background: #0e5d59;
+  transform: translateY(-1px);
+}
+
+.modern-add-btn.added {
+  background: #059669;
+}
+
+.modern-add-btn.disabled {
+  background: #e2ece9;
+  color: #8da4a0;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Load More Button */
+.modern-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 36px;
+}
+
+.modern-load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: #ffffff;
+  border: 1.5px solid #d4ece7;
+  border-radius: 30px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #123835;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(18, 56, 53, 0.05);
+}
+
+.modern-load-more-btn:hover {
+  border-color: #04959d;
+  color: #04959d;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(4, 149, 157, 0.12);
+}
+
+/* Empty State */
+.modern-store-empty-state {
+  padding: 60px 20px;
+  text-align: center;
+  background: #ffffff;
+  border: 1.5px dashed #cfe5e0;
+  border-radius: 20px;
+  margin-top: 20px;
+}
+
+.modern-store-empty-state .empty-state-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.modern-store-empty-state .empty-state-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #123835;
+  margin: 0 0 8px;
+}
+
+.modern-store-empty-state .empty-state-text {
+  font-size: 13.5px;
+  color: #648a85;
+  margin: 0 0 18px;
+}
+
+.modern-empty-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  background: #04959d;
+  color: #ffffff;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .modern-store-cat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .modern-products-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .modern-store-cat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .modern-products-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .modern-store-cat-grid {
+    grid-template-columns: 1fr;
+  }
+  .modern-products-grid {
+    grid-template-columns: 1fr;
+  }
+  .modern-store-controls-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

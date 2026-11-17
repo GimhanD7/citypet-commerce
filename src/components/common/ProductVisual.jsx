@@ -246,12 +246,78 @@ export default function ProductVisual({ type, name, category }) {
         </div>
       )
 
-    default:
+    case 'shampoo':
       return (
-        <div className="pv-wrapper pv-generic">
-          <PawPrint size={40} color="#04959d" />
+        <div className="pv-wrapper pv-shampoo-modern">
+          <div className="pv-shampoo-bottle">
+            <div className="pv-shampoo-cap" />
+            <div className="pv-shampoo-label">
+              <span className="pv-shampoo-icon">🧴</span>
+              <strong className="pv-shampoo-brand">CITY PET</strong>
+              <span className="pv-shampoo-text">Grooming & Bath</span>
+            </div>
+          </div>
+        </div>
+      )
+
+    case 'foods':
+      return (
+        <div className="pv-wrapper pv-foods-modern">
+          <div className="pv-foods-pack">
+            <div className="pv-foods-top-notch" />
+            <div className="pv-foods-badge">NUTRITION</div>
+            <div className="pv-foods-center">
+              <span className="pv-foods-icon">🥣</span>
+            </div>
+            <div className="pv-foods-footer">
+              <strong className="pv-foods-title">Premium Food</strong>
+            </div>
+          </div>
+        </div>
+      )
+
+    case 'accessories':
+      return (
+        <div className="pv-wrapper pv-accessories-modern">
+          <div className="pv-acc-card">
+            <div className="pv-acc-ring">
+              <span className="pv-acc-icon">🦮</span>
+            </div>
+            <div className="pv-acc-tag">City Pet Gear</div>
+            <span className="pv-acc-sub">Comfort & Safety</span>
+          </div>
+        </div>
+      )
+
+    case 'healthcare':
+      return (
+        <div className="pv-wrapper pv-healthcare-modern">
+          <div className="pv-health-box">
+            <div className="pv-health-cross">➕</div>
+            <strong className="pv-health-title">VET CARE</strong>
+            <span className="pv-health-sub">Certified Medical</span>
+            <div className="pv-health-pills">💊 🩺</div>
+          </div>
+        </div>
+      )
+
+    default: {
+      const lower = (name || '').toLowerCase()
+      const isShampoo = lower.includes('shampoo') || lower.includes('groom') || lower.includes('wash') || lower.includes('cleaner')
+      const isFood = lower.includes('food') || lower.includes('treat') || lower.includes('biscuit') || lower.includes('can') || lower.includes('meat')
+      const isHealth = lower.includes('tablet') || lower.includes('syrup') || lower.includes('drop') || lower.includes('injection') || lower.includes('suspension')
+      const icon = isShampoo ? '🧴' : isFood ? '🥣' : isHealth ? '💊' : '🦮'
+      const label = isShampoo ? 'Grooming' : isFood ? 'Pet Food' : isHealth ? 'Veterinary' : 'Accessory'
+
+      return (
+        <div className="pv-wrapper pv-generic-modern">
+          <div className="pv-generic-avatar-wrap">
+            <span className="pv-generic-emoji">{icon}</span>
+          </div>
+          <span className="pv-generic-category-badge">{label}</span>
           <span className="pv-generic-name">{name}</span>
         </div>
       )
+    }
   }
 }

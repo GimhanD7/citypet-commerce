@@ -50,7 +50,8 @@ export default function StoreCatalog({
       try {
         const data = await productService.getAllProducts()
         if (mounted) {
-          setProductsList(Array.isArray(data) ? data : [])
+          const list = Array.isArray(data) && data.length > 0 ? data : storeProducts
+          setProductsList(list)
         }
       } catch (e) {
         console.warn('Error loading products from API:', e)
@@ -138,12 +139,10 @@ export default function StoreCatalog({
 
   const getProductCategory = (p) => {
     const val = String(p?.category || p?.category_id || '').toLowerCase().trim()
-    if (val === 'food') return 'food'
-    if (val === 'treat' || val === 'treats') return 'treats'
-    if (val === 'grooming') return 'grooming'
-    if (val === 'accessory' || val === 'accessories') return 'accessories'
+    if (val === 'food' || val === 'foods' || val === 'treat' || val === 'treats') return 'foods'
+    if (val === 'shampoo' || val === 'grooming') return 'shampoo'
+    if (val === 'accessory' || val === 'accessories' || val === 'toy' || val === 'toys') return 'accessories'
     if (val === 'healthcare' || val === 'health') return 'healthcare'
-    if (val === 'toy' || val === 'toys') return 'toys'
     return val
   }
 

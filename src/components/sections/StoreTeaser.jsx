@@ -12,11 +12,13 @@ import {
 import SectionTitle from '../common/SectionTitle'
 import ProductVisual from '../common/ProductVisual'
 import useStoreProducts from '../../services/useStoreProducts'
+import { storeProducts as fallbackProducts } from '../../data/storeData'
 
 export default function StoreTeaser({ onNavigateToStore, onAddToCart, onSelectProduct }) {
   const storeProducts = useStoreProducts()
   const [addedAnimation, setAddedAnimation] = useState({})
-  const popularProducts = storeProducts.slice(0, 8)
+  const items = Array.isArray(storeProducts) && storeProducts.length > 0 ? storeProducts : fallbackProducts
+  const popularProducts = items.slice(0, 8)
 
   const handleAdd = (product) => {
     const stockCount = product.stockCount !== undefined ? product.stockCount : (product.inStock ? 15 : 0)
