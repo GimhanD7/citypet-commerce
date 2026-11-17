@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Edit2,
   Grid3X3,
@@ -11,18 +11,10 @@ import {
   X,
 } from 'lucide-react'
 
-// ─── Default data ──────────────────────────────────────────────────────────────
+import { categoryService } from '../../../services/api'
+import { apiFetch } from '../../../config/api'
 
-const DEFAULT_CATEGORIES = [
-  { id: 'food',        name: 'Pet Food',     slug: 'food',        emoji: '🥣', color: '#fdf2e9', accent: '#d97706', description: 'Dry food, wet food, raw diets and specialty nutrition.' },
-  { id: 'treats',      name: 'Treats',       slug: 'treats',      emoji: '🦴', color: '#fbf0f3', accent: '#e91e8c', description: 'Dental chews, training treats and snack rewards.' },
-  { id: 'grooming',    name: 'Grooming',     slug: 'grooming',    emoji: '🪮', color: '#f0f5fa', accent: '#2563eb', description: 'Shampoos, brushes, clippers and hygiene products.' },
-  { id: 'accessories', name: 'Accessories',  slug: 'accessories', emoji: '🦮', color: '#eefaf7', accent: '#0d8a4d', description: 'Collars, leashes, harnesses and travel gear.' },
-  { id: 'healthcare',  name: 'Healthcare',   slug: 'healthcare',  emoji: '➕', color: '#e9f7f4', accent: '#0e5d59', description: 'Vitamins, supplements, flea & tick prevention.' },
-  { id: 'toys',        name: 'Toys',         slug: 'toys',        emoji: '🎾', color: '#f5f0fb', accent: '#7c3aed', description: 'Interactive toys, chew toys and enrichment games.' },
-  { id: 'dogs',        name: 'Dogs',         slug: 'dogs',        emoji: '🐶', color: '#fff0e6', accent: '#ea580c', description: 'All products specifically for dogs.' },
-  { id: 'cats',        name: 'Cats',         slug: 'cats',        emoji: '🐱', color: '#eef8f6', accent: '#04959d', description: 'All products specifically for cats.' },
-]
+// ─── Default data ──────────────────────────────────────────────────────────────
 
 const EMOJI_OPTIONS = ['🥣','🦴','🪮','🦮','➕','🎾','🐶','🐱','🐾','🐠','🐦','🐹','🌿','💊','🛁','🎀','🧸','🏆','⭐','🌟']
 
@@ -41,7 +33,7 @@ const COLOR_PRESETS = [
 
 // ─── Category Modal ────────────────────────────────────────────────────────────
 
-function CategoryModal({ category, allProducts, onSave, onClose }) {
+function CategoryModal({ category, allProducts, onSave, onClose, saving }) {
   const isEdit = Boolean(category)
   const [form, setForm] = useState({
     name:        category?.name        || '',
@@ -125,6 +117,7 @@ function CategoryModal({ category, allProducts, onSave, onClose }) {
                 className="cat-input"
                 placeholder="e.g. pet-food"
                 value={form.slug}
+                readOnly={isEdit}
                 onChange={set('slug')}
               />
             </div>
@@ -187,7 +180,7 @@ function CategoryModal({ category, allProducts, onSave, onClose }) {
           {/* Footer */}
           <div className="cat-modal-footer">
             <button type="button" className="cat-cancel-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="cat-submit-btn" style={{ background: form.accent }}>
+            <button type="submit" disabled={saving} className="cat-submit-btn" style={{ background: form.accent }}>
               <Layers size={14} />
               {isEdit ? 'Save Changes' : 'Create Category'}
             </button>
@@ -240,7 +233,10 @@ function CategoryCard({ cat, productCount, onEdit, onDelete }) {
 // ─── Main View ─────────────────────────────────────────────────────────────────
 
 export default function CategoriesView({ adminProducts = [], showToast }) {
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [search, setSearch]         = useState('')
   const [modal, setModal]           = useState(null)   // null | 'add' | category object
 
@@ -250,32 +246,71 @@ export default function CategoriesView({ adminProducts = [], showToast }) {
     c.slug.toLowerCase().includes(search.toLowerCase())
   )
 
-  const productCountFor = (cat) =>
-    adminProducts.filter((p) => p.category === cat.slug || p.category === cat.id).length
+  const productCountFor = (category) => Number(category.count || 0)
 
-  const totalProducts = adminProducts.length
+  const totalProducts = categories.reduce((total, category) => total + productCountFor(category), 0)
 
-  const handleSave = (data) => {
-    setCategories((prev) => {
-      const exists = prev.find((c) => c.id === data.id)
-      if (exists) {
-        showToast?.(`Category "${data.name}" updated.`)
-        return prev.map((c) => (c.id === data.id ? { ...c, ...data } : c))
-      }
-      showToast?.(`Category "${data.name}" created!`)
-      return [...prev, data]
-    })
-    setModal(null)
+  async function loadCategories() {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await categoryService.getCategories({ allowFallback: false })
+      setCategories(data.categories.map((category) => ({
+        ...category,
+        slug: category.id,
+        emoji: category.emoji ?? category.icon ?? '',
+        color: category.color ?? category.bg ?? '#eefaf7',
+        accent: category.accent || '#0e5d59',
+        description: category.description || '',
+      })))
+    } catch (failure) {
+      setError(failure.message || 'Unable to load categories.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDelete = (cat) => {
-    const count = productCountFor(cat)
-    const msg = count > 0
-      ? `"${cat.name}" has ${count} product(s). Deleting it won't remove those products but they'll become uncategorised. Continue?`
-      : `Delete category "${cat.name}"?`
-    if (!window.confirm(msg)) return
-    setCategories((prev) => prev.filter((c) => c.id !== cat.id))
-    showToast?.(`Category "${cat.name}" deleted.`)
+  useEffect(() => { loadCategories() }, [])
+
+  async function handleSave(data) {
+    if (saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const session = await apiFetch('auth.php?action=session')
+      const editing = modal !== 'add'
+      await apiFetch(`categories.php?id=${encodeURIComponent(data.id)}`, {
+        method: editing ? 'PUT' : 'POST',
+        body: { ...data, icon: data.emoji, bg: data.color, csrfToken: session.csrfToken },
+      })
+      await loadCategories()
+      setModal(null)
+      showToast?.('Category saved.')
+    } catch (failure) {
+      setError(failure.message)
+      showToast?.(failure.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(category) {
+    if (saving || !window.confirm(`Delete category "${category.name}"?`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const session = await apiFetch('auth.php?action=session')
+      await apiFetch(`categories.php?id=${encodeURIComponent(category.id)}`, {
+        method: 'DELETE', body: { csrfToken: session.csrfToken },
+      })
+      await loadCategories()
+      showToast?.('Category deleted.')
+    } catch (failure) {
+      setError(failure.message)
+      showToast?.(failure.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Summary KPIs
@@ -285,6 +320,8 @@ export default function CategoriesView({ adminProducts = [], showToast }) {
 
   return (
     <div className="cat-page">
+      {loading && <p role="status">Loading categories…</p>}
+      {error && <p role="alert">{error}</p>}
 
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="cat-page-header">
@@ -389,6 +426,7 @@ export default function CategoriesView({ adminProducts = [], showToast }) {
       {/* ── Modal ───────────────────────────────────────────── */}
       {modal && (
         <CategoryModal
+          saving={saving}
           category={modal === 'add' ? null : modal}
           allProducts={adminProducts}
           onSave={handleSave}

@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS `categories` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+INSERT INTO `categories` (`id`, `name`, `icon`, `bg`, `item_count`, `sort_order`) VALUES
+    ('foods', 'Foods & Treats', '🥣', '#fdf2e9', 183, 1),
+    ('shampoo', 'Shampoo & Grooming', '🧴', '#f0f5fa', 91, 2),
+    ('accessories', 'Accessories', '🦮', '#eefaf7', 206, 3),
+    ('healthcare', 'Healthcare & Pharmacy', '💊', '#eef8f6', 131, 4)
+ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `icon` = VALUES(`icon`), `bg` = VALUES(`bg`), `sort_order` = VALUES(`sort_order`);
+
 -- 3. Pet Types Table
 CREATE TABLE IF NOT EXISTS `pet_types` (
     `id` VARCHAR(64) PRIMARY KEY,

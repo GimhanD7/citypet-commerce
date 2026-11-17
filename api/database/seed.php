@@ -110,14 +110,10 @@ try {
 
     // 4. Ensure Base Categories exist (with real item_count from products table)
     $categories = [
-        ['dogs', 'Dogs', '🐶', '#fff0e6', 0, 1],
-        ['cats', 'Cats', '🐱', '#eef8f6', 0, 2],
-        ['food', 'Food', '🥣', '#fdf2e9', 0, 3],
-        ['treats', 'Treats', '🦴', '#fbf0f3', 0, 4],
-        ['grooming', 'Grooming', '🪮', '#f0f5fa', 0, 5],
-        ['accessories', 'Accessories', '🦮', '#eefaf7', 0, 6],
-        ['healthcare', 'Healthcare', '➕', '#e9f7f4', 0, 7],
-        ['toys', 'Toys', '🎾', '#f5f0fb', 0, 8],
+        ['foods', 'Foods & Treats', '🥣', '#fdf2e9', 0, 1],
+        ['shampoo', 'Shampoo & Grooming', '🧴', '#f0f5fa', 0, 2],
+        ['accessories', 'Accessories', '🦮', '#eefaf7', 0, 3],
+        ['healthcare', 'Healthcare & Pharmacy', '💊', '#eef8f6', 0, 4],
     ];
     $stmtCat = $pdo->prepare("
         INSERT INTO `categories` (`id`, `name`, `icon`, `bg`, `item_count`, `sort_order`)
