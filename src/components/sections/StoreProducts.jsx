@@ -169,8 +169,41 @@ export default function StoreProducts({
           </div>
         </div>
 
-        {/* Simplified Category Selector Pills */}
-        <div className="modern-cat-pill-strip">
+        {/* Mobile Screen Category Dropdown (Shown on mobile devices) */}
+        <div className="modern-cat-mobile-dropdown-container">
+          <label htmlFor="mobile-store-category-select" className="modern-cat-mobile-label">
+            <span className="cat-mobile-label-title">
+              <span className="cat-mobile-label-dot" />
+              Select Category
+            </span>
+            <span className="cat-mobile-badge">{activeCategoryObj?.count || 611} items</span>
+          </label>
+          <div className="modern-cat-mobile-select-wrapper">
+            <span className="modern-cat-mobile-lead-icon">{activeCategoryObj?.icon || '🐾'}</span>
+            <select
+              id="mobile-store-category-select"
+              value={selectedCategory}
+              onChange={(e) => {
+                if (onSelectCategory) {
+                  onSelectCategory(e.target.value)
+                }
+                setVisibleCount(24)
+              }}
+              className="modern-cat-mobile-select"
+              aria-label="Select product category"
+            >
+              {storeCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon}  {cat.name} ({cat.count} items)
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={18} className="modern-cat-mobile-chevron" />
+          </div>
+        </div>
+
+        {/* Desktop Simplified Category Selector Pills (Hidden on mobile) */}
+        <div className="modern-cat-pill-strip desktop-only-cat-strip">
           {storeCategories.map((cat) => {
             const isSelected = selectedCategory === cat.id
             return (

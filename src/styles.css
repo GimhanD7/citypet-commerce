@@ -19021,7 +19021,93 @@ img {
   color: #ffffff;
 }
 
-/* ── Modern Category Pills Strip ── */
+/* ── Modern Category Selector (Desktop Pills & Mobile Dropdown) ── */
+.modern-cat-mobile-dropdown-container {
+  display: none;
+  margin-bottom: 18px;
+}
+
+.modern-cat-mobile-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #173d3b;
+}
+
+.cat-mobile-label-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cat-mobile-label-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #04959d;
+}
+
+.cat-mobile-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #04959d;
+  background: #e6f6f4;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.modern-cat-mobile-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: #ffffff;
+  border: 1.5px solid #cce8e2;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(11, 46, 43, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modern-cat-mobile-select-wrapper:focus-within {
+  border-color: #04959d;
+  box-shadow: 0 0 0 3px rgba(4, 149, 157, 0.15);
+}
+
+.modern-cat-mobile-lead-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.modern-cat-mobile-select {
+  width: 100%;
+  height: 50px;
+  padding: 0 42px 0 48px;
+  background: transparent;
+  border: none;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #133835;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+}
+
+.modern-cat-mobile-chevron {
+  position: absolute;
+  right: 14px;
+  color: #04959d;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Modern Category Pills Strip (Desktop) ── */
 .modern-cat-pill-strip {
   display: flex;
   align-items: center;
@@ -19082,6 +19168,16 @@ img {
 .modern-cat-pill-btn.active .cat-pill-count {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
+}
+
+/* Responsive Switching */
+@media (max-width: 768px) {
+  .desktop-only-cat-strip {
+    display: none !important;
+  }
+  .modern-cat-mobile-dropdown-container {
+    display: block !important;
+  }
 }
 
 /* ── Controls Bar ── */
