@@ -453,67 +453,36 @@ export const adminService = {
 /* ============================================================
    8. USER & ADMIN ACTIVITY AUDIT LOG SERVICE
    ============================================================ */
-let lastActivitySignature = ''
-let lastActivityTime = 0
 
 export const activityService = {
-  /**
-   * Log user or admin activity to database
-   */
   async logActivity(payload) {
-    const action = payload.action || 'GENERAL_ACTION'
-    const entityId = payload.entityId || ''
-    const description = payload.description || 'Performed user action'
-    const sig = `${action}_${entityId}_${description}`
-    const now = Date.now()
-
-    if (sig === lastActivitySignature && now - lastActivityTime < 2500) {
+    try {
+      const session = await apiFetch('auth.php?action=session')
+      const result = await apiFetch('activity_logs.php', {
+        method: 'POST',
+        body: {
+          action: payload.action || 'GENERAL_ACTION',
+          description: payload.description || 'Performed user action',
+          entity_type: payload.entityType || 'system',
+          entity_id: payload.entityId || null,
+          csrfToken: session.csrfToken,
+        },
+      })
+      window.dispatchEvent(new CustomEvent('citypet_activity_updated'))
+      return result
+    } catch (error) {
+      console.warn('Unable to save activity log:', error.message)
       return null
     }
-    lastActivitySignature = sig
-    lastActivityTime = now
-
-    const entry = {
-      id: 'log-' + now + '-' + Math.floor(Math.random() * 1000),
-      user_id: payload.userId || 'adm-001',
-      user_name: payload.userName || 'Administrator',
-      role: payload.role || 'admin',
-      action,
-      description,
-      entity_type: payload.entityType || 'system',
-      entity_id: payload.entityId || null,
-      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    }
-
-    try {
-      await apiFetch('activity_logs.php', {
-        method: 'POST',
-        body: entry,
-      })
-    } catch (err) {
-      console.warn('[activityService.logActivity] Error logging activity:', err.message)
-    }
-
-    return entry
   },
-
-  /**
-   * Fetch activity logs from database
-   */
   async getActivityLogs(params = {}) {
-    try {
-      const query = new URLSearchParams()
-      if (params.action && params.action !== 'all') query.append('action', params.action)
-      if (params.role && params.role !== 'all') query.append('role', params.role)
-      if (params.search) query.append('search', params.search)
-
-      const qs = query.toString()
-      const res = await apiFetch(`activity_logs.php${qs ? '?' + qs : ''}`)
-      return Array.isArray(res?.logs) ? res.logs : (Array.isArray(res) ? res : [])
-    } catch (err) {
-      console.warn('[activityService.getActivityLogs] Error loading activity logs:', err.message)
-      return []
+    const query = new URLSearchParams()
+    for (const key of ['search', 'action', 'role', 'limit', 'offset']) {
+      if (params[key] !== undefined && params[key] !== '' && params[key] !== 'all') query.set(key, String(params[key]))
     }
+    const response = await apiFetch(`activity_logs.php?${query}`)
+    if (!Array.isArray(response?.logs)) throw new Error('Invalid activity log response.')
+    return response
   },
 }
 

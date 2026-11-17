@@ -1,235 +1,92 @@
 import React, { useEffect, useState } from 'react'
-import {
-  Activity,
-  AlertCircle,
-  Clock,
-  Database,
-  Filter,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  User,
-  Users,
-  X,
-} from 'lucide-react'
+import { Activity, Database, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react'
 import { activityService } from '../../../services/api'
+import './activity-logs.css'
 
-export default function ActivityLogsView({ showToast }) {
-  const [logs, setLogs] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [actionFilter, setActionFilter] = useState('all')
+const pageSize = 25
+const emptyResult = { logs: [], total: 0, summary: {}, actions: [] }
+const actionLabel = (action) => action.toLowerCase().replaceAll('_', ' ')
 
-  const fetchLogs = async () => {
-    setLoading(true)
-    try {
-      const data = await activityService.getActivityLogs({
-        search: searchQuery,
-        action: actionFilter,
-      })
-      setLogs(data || [])
-    } catch (err) {
-      console.warn('Failed to load activity logs:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+export default function ActivityLogsView() {
+  const [result, setResult] = useState(emptyResult)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [action, setAction] = useState('all')
+  const [page, setPage] = useState(1)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
-    fetchLogs()
-  }, [actionFilter, searchQuery])
+    const refresh = () => setRevision((value) => value + 1)
+    window.addEventListener('citypet_activity_updated', refresh)
+    return () => window.removeEventListener('citypet_activity_updated', refresh)
+  }, [])
 
-  // Metric counts
-  const adminActionsCount = logs.filter((l) => l.role === 'admin').length
-  const customerActionsCount = logs.filter((l) => l.role === 'user').length
-  const inventoryEventsCount = logs.filter((l) => l.action === 'STOCK_UPDATE' || l.entity_type === 'inventory').length
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    const timer = setTimeout(async () => {
+      try {
+        const data = await activityService.getActivityLogs({ search, action, limit: pageSize, offset: (page - 1) * pageSize })
+        if (!active) return
+        setResult(data)
+        const lastPage = Math.max(1, Math.ceil(data.total / pageSize))
+        if (page > lastPage) setPage(lastPage)
+      } catch (failure) {
+        if (active) { setError(failure.message || 'Unable to load activity logs.'); setResult(emptyResult) }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }, search ? 250 : 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [search, action, page, revision])
 
-  const getActionBadgeClass = (action) => {
-    switch (action) {
-      case 'PRODUCT_ADD':
-      case 'PRODUCT_SAVE':
-        return 'success'
-      case 'STOCK_UPDATE':
-        return 'info'
-      case 'PRODUCT_DELETE':
-        return 'danger-pill'
-      case 'ORDER_CREATE':
-        return 'purple'
-      case 'REPORT_GENERATE':
-        return 'warning-amber'
-      default:
-        return 'info'
-    }
-  }
+  const summary = result.summary || {}
+  const pages = Math.max(1, Math.ceil(result.total / pageSize))
+  const cards = [
+    { label: 'Audit Logs', value: result.total, icon: Database },
+    { label: 'Administrator Actions', value: summary.admin, icon: ShieldCheck },
+    { label: 'Customer Actions', value: summary.customer, icon: Users },
+    { label: 'Inventory Updates', value: summary.inventory, icon: Activity },
+  ]
 
   return (
-    <div className="admin-subview-panel admin-activity-logs-page">
-      {/* Subview Header */}
-      <div className="subview-header-row">
-        <div>
-          <span className="welcome-eyebrow">SYSTEM SECURITY & AUDIT TRAIL</span>
-          <h2 className="subview-title">User & Admin Activity Logs</h2>
-          <p className="welcome-sub-desc">
-            Real-time audit logging connected to MySQL database. Tracks product edits, stock changes, orders, and system activity.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="quick-action-btn secondary-mint"
-          onClick={() => {
-            fetchLogs()
-            showToast('Activity logs synchronized with database!')
-          }}
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh Audit Logs</span>
-        </button>
+    <section className="audit-page" aria-labelledby="audit-title">
+      <header className="audit-header">
+        <div><h2 id="audit-title">Activity Logs</h2><p>Saved user actions, stock changes and order activity.</p></div>
+        <button type="button" className="audit-refresh" disabled={loading} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={16} />{loading ? 'Loading…' : 'Refresh Logs'}</button>
+      </header>
+      <div className="audit-metrics">
+        {cards.map(({ label, value, icon: Icon }) => <article className="audit-metric" key={label}><div><span>{label}</span><Icon size={17} /></div><strong>{loading || error ? '—' : Number(value || 0).toLocaleString()}</strong></article>)}
       </div>
-
-      {/* 4 Metric Summary Cards */}
-      <div className="admin-kpi-cards-grid">
-        <div className="admin-kpi-card mint-card">
-          <div className="kpi-card-top">
-            <span className="kpi-metric-label">TOTAL AUDIT LOGS</span>
-            <div className="kpi-icon-bubble mint-bubble"><Database size={17} /></div>
-          </div>
-          <strong className="kpi-big-value">{logs.length} Log Entries</strong>
-          <small className="kpi-sub-text">Recorded activity history</small>
-        </div>
-
-        <div className="admin-kpi-card cyan-card">
-          <div className="kpi-card-top">
-            <span className="kpi-metric-label">ADMINISTRATOR ACTIONS</span>
-            <div className="kpi-icon-bubble cyan-bubble"><ShieldCheck size={17} /></div>
-          </div>
-          <strong className="kpi-big-value">{adminActionsCount} Admin Events</strong>
-          <small className="kpi-sub-text">Staff & doctor portal activity</small>
-        </div>
-
-        <div className="admin-kpi-card blue-card">
-          <div className="kpi-card-top">
-            <span className="kpi-metric-label">CUSTOMER ACTIONS</span>
-            <div className="kpi-icon-bubble blue-bubble"><Users size={17} /></div>
-          </div>
-          <strong className="kpi-big-value">{customerActionsCount} User Events</strong>
-          <small className="kpi-sub-text">Store orders & account activity</small>
-        </div>
-
-        <div className="admin-kpi-card salmon-card">
-          <div className="kpi-card-top">
-            <span className="kpi-metric-label">INVENTORY UPDATES</span>
-            <div className="kpi-icon-bubble salmon-bubble"><Activity size={17} /></div>
-          </div>
-          <strong className="kpi-big-value">{inventoryEventsCount} Stock Edits</strong>
-          <small className="kpi-sub-text">Pharmacy inventory adjustments</small>
-        </div>
+      <div className="audit-toolbar">
+        <label className="audit-search"><Search size={16} /><input aria-label="Search activity logs" placeholder="Search user, action, details or IP address" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />{search && <button type="button" aria-label="Clear search" onClick={() => { setSearch(''); setPage(1) }}><X size={15} /></button>}</label>
+        <label className="audit-action"><span>Action</span><select value={action} onChange={(event) => { setAction(event.target.value); setPage(1) }}><option value="all">All actions</option>{[...new Set([...result.actions, ...(action === 'all' ? [] : [action])])].map((value) => <option key={value} value={value}>{actionLabel(value)}</option>)}</select></label>
       </div>
-
-      {/* Toolbar: Search & Action Filter */}
-      <div className="admin-card-surface products-toolbar-surface">
-        <div className="admin-product-search-box">
-          <Search size={16} className="search-lens-icon" />
-          <input
-            type="text"
-            placeholder="Search activity by user, action, description, or IP address..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="admin-product-search-input"
-          />
-          {searchQuery && (
-            <button type="button" onClick={() => setSearchQuery('')} className="clear-search-btn">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        <div className="admin-product-filter-box">
-          <Filter size={15} className="filter-icon" />
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="admin-product-filter-select"
-          >
-            <option value="all">All Log Actions</option>
-            <option value="PRODUCT_ADD">Product Added</option>
-            <option value="STOCK_UPDATE">Stock / Inventory Updated</option>
-            <option value="PRODUCT_DELETE">Product Deleted</option>
-            <option value="ORDER_CREATE">Order Placed</option>
-            <option value="REPORT_GENERATE">Report Generated</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Activity Logs Table */}
-      <div className="admin-card-surface">
-        <div className="admin-table-responsive">
-          <table className="admin-data-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>User & Role</th>
-                <th>Action Type</th>
-                <th>Description / Activity Details</th>
-                <th>Entity Info</th>
-                <th>IP Address</th>
-              </tr>
-            </thead>
+      {error && <div className="audit-error" role="alert">{error} <button type="button" onClick={() => setRevision((value) => value + 1)}>Retry</button></div>}
+      <div className="audit-table-card">
+        <div className="audit-table-scroll" tabIndex={0} role="region" aria-label="Activity records" aria-busy={loading}>
+          <table className="audit-table">
+            <thead><tr><th>Timestamp</th><th>User &amp; Role</th><th>Action</th><th>Activity Details</th><th>Entity</th><th>IP Address</th></tr></thead>
             <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>
-                    <div className="empty-subview-card">
-                      <Clock size={28} style={{ margin: '0 auto 10px', color: '#7aa39e' }} />
-                      <h4>No Activity Logs Found</h4>
-                      <p>No user activity records match your search query.</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="td-date">
-                      <div className="flex items-center gap-2">
-                        <Clock size={13} className="text-teal-600" />
-                        <strong>{log.created_at}</strong>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="pet-owner-combo">
-                        <div className="w-8 h-8 rounded-full bg-teal-50 grid place-items-center text-teal-700 font-bold text-xs">
-                          {log.role === 'admin' ? '👨‍⚕️' : '👤'}
-                        </div>
-                        <div className="pet-owner-texts">
-                          <strong>{log.user_name}</strong>
-                          <small className="capitalize">{log.role}</small>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${getActionBadgeClass(log.action)}`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="font-semibold text-gray-800 text-sm">{log.description}</span>
-                    </td>
-                    <td>
-                      {log.entity_id ? (
-                        <span className="status-pill purple text-xs font-mono">
-                          {log.entity_type || 'item'}: {log.entity_id}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="td-sku font-mono text-xs">{log.ip_address || '127.0.0.1'}</td>
-                  </tr>
-                ))
-              )}
+              {!loading && !error && result.logs.map((log) => <tr key={log.id}>
+                <td><time dateTime={String(log.created_at).replace(' ', 'T')}><span>{String(log.created_at).split(' ')[0]}</span><small>{String(log.created_at).split(' ')[1]}</small></time></td>
+                <td><strong>{log.user_name || log.user_id || 'Unknown user'}</strong><small className="audit-role">{log.role || 'Unknown role'}</small></td>
+                <td><span className={`audit-badge ${log.action === 'STOCK_UPDATE' ? 'audit-stock' : ''}`}>{actionLabel(log.action)}</span></td>
+                <td className="audit-description">{log.description}</td>
+                <td className="audit-entity">{log.entity_id ? <><small>{log.entity_type || 'item'}</small><span>{log.entity_id}</span></> : '—'}</td>
+                <td className="audit-ip">{log.ip_address || '—'}</td>
+              </tr>)}
+              {(loading || error || !result.logs.length) && <tr><td className="audit-empty" colSpan={6}>{loading ? 'Loading activity logs…' : error ? 'Activity logs could not be loaded.' : 'No activity matches these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>
+        <footer className="audit-pagination">
+          <span role="status">{loading ? 'Loading…' : `${result.total ? (page - 1) * pageSize + 1 : 0}–${Math.min(page * pageSize, result.total)} of ${result.total} records`}</span>
+          <div><button type="button" disabled={loading || page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={loading || page >= pages} onClick={() => setPage((value) => value + 1)}>Next</button></div>
+        </footer>
       </div>
-    </div>
+    </section>
   )
 }

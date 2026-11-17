@@ -1,139 +1,50 @@
 <?php
-/**
- * City Pet Animal Hospital - User Activity Logs API
- * Stores and lists audit trail logs of all user/admin actions.
- */
-
+declare(strict_types=1);
 require_once __DIR__ . '/config/cors.php';
 require_once __DIR__ . '/config/db.php';
-
+require_once __DIR__ . '/config/session.php';
+$pdo = Database::getConnection();
+if (!$pdo) jsonError('Database connection unavailable', 503);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-
+$user = currentSessionUser($pdo, $method === 'GET');
+header('Cache-Control: no-store');
 try {
-    $db = Database::getConnection();
-    if (!$db) {
-        http_response_code(500);
-        echo json_encode(['error' => 'Database connection unavailable']);
-        exit();
-    }
-
     if ($method === 'GET') {
-        $actionFilter = isset($_GET['action']) ? trim($_GET['action']) : '';
-        $roleFilter = isset($_GET['role']) ? trim($_GET['role']) : '';
-        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-        $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 50;
-        $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
-
-        $where = [];
+        $conditions = [];
         $params = [];
-
-        if ($actionFilter && $actionFilter !== 'all') {
-            $where[] = "action = ?";
-            $params[] = $actionFilter;
+        foreach (['action','role'] as $field) {
+            $value = trim((string)($_GET[$field] ?? ''));
+            if ($value !== '' && $value !== 'all') { $conditions[] = "$field = ?"; $params[] = $value; }
         }
-
-        if ($roleFilter && $roleFilter !== 'all') {
-            $where[] = "role = ?";
-            $params[] = $roleFilter;
+        $search = trim((string)($_GET['search'] ?? ''));
+        if ($search !== '') {
+            $conditions[] = '(user_name LIKE ? OR description LIKE ? OR action LIKE ? OR entity_id LIKE ? OR ip_address LIKE ?)';
+            array_push($params, ...array_fill(0, 5, "%$search%"));
         }
-
-        if ($search) {
-            $where[] = "(user_name LIKE ? OR description LIKE ? OR action LIKE ? OR entity_id LIKE ?)";
-            $searchTerm = "%{$search}%";
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-        }
-
-        $whereClause = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
-
-        // Total count query
-        $countStmt = $db->prepare("SELECT COUNT(*) as total FROM user_activity_logs {$whereClause}");
-        $countStmt->execute($params);
-        $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
-
-        // Fetch logs
-        $sql = "SELECT * FROM user_activity_logs {$whereClause} ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}";
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        echo json_encode([
-            'success' => true,
-            'total' => intval($total),
-            'logs' => $logs
-        ]);
-        exit();
+        $where = $conditions ? ' WHERE ' . implode(' AND ', $conditions) : '';
+        $limit = max(1, min(100, (int)($_GET['limit'] ?? 25)));
+        $offset = max(0, (int)($_GET['offset'] ?? 0));
+        $summary = $pdo->prepare("SELECT COUNT(*) AS total, COALESCE(SUM(role NOT IN ('user','customer','guest')),0) AS admin, COALESCE(SUM(role IN ('user','customer')),0) AS customer, COALESCE(SUM(action = 'STOCK_UPDATE' OR entity_type = 'inventory'),0) AS inventory FROM user_activity_logs $where");
+        $summary->execute($params);
+        $counts = array_map('intval', $summary->fetch());
+        $query = $pdo->prepare("SELECT * FROM user_activity_logs $where ORDER BY created_at DESC, id DESC LIMIT $limit OFFSET $offset");
+        $query->execute($params);
+        $actions = $pdo->query('SELECT DISTINCT action FROM user_activity_logs ORDER BY action')->fetchAll(PDO::FETCH_COLUMN);
+        jsonResponse(['logs'=>$query->fetchAll(),'total'=>$counts['total'],'summary'=>$counts,'actions'=>$actions,'limit'=>$limit,'offset'=>$offset]);
     }
-
-    if ($method === 'POST') {
-        $data = json_decode(file_get_contents('php://input'), true);
-
-        if (!$data || !isset($data['action']) || !isset($data['description'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Action and description are required fields.']);
-            exit();
-        }
-
-        $logId = 'log-' . time() . '-' . rand(1000, 9999);
-        $userId = isset($data['user_id']) ? $data['user_id'] : 'usr-anonymous';
-        $userName = isset($data['user_name']) ? $data['user_name'] : 'System User';
-        $role = isset($data['role']) ? $data['role'] : 'user';
-        $action = strtoupper(trim($data['action']));
-        $description = trim($data['description']);
-        $entityType = isset($data['entity_type']) ? $data['entity_type'] : null;
-        $entityId = isset($data['entity_id']) ? $data['entity_id'] : null;
-        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-
-        // Check for duplicate activity log within the last 5 seconds
-        $dupCheck = $db->prepare("
-            SELECT id FROM user_activity_logs 
-            WHERE action = ? AND description = ? 
-            AND (entity_id = ? OR (entity_id IS NULL AND ? IS NULL))
-            AND created_at >= (NOW() - INTERVAL 5 SECOND)
-            ORDER BY created_at DESC LIMIT 1
-        ");
-        $dupCheck->execute([$action, $description, $entityId, $entityId]);
-        $existingId = $dupCheck->fetchColumn();
-
-        if ($existingId) {
-            echo json_encode([
-                'success' => true,
-                'log_id' => $existingId,
-                'message' => 'Duplicate activity prevented; existing log kept.'
-            ]);
-            exit();
-        }
-
-        $stmt = $db->prepare("
-            INSERT INTO user_activity_logs 
-            (id, user_id, user_name, role, action, description, entity_type, entity_id, ip_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-
-        $stmt->execute([
-            $logId,
-            $userId,
-            $userName,
-            $role,
-            $action,
-            $description,
-            $entityType,
-            $entityId,
-            $ipAddress
-        ]);
-
-        echo json_encode([
-            'success' => true,
-            'log_id' => $logId,
-            'message' => 'User activity logged successfully.'
-        ]);
-        exit();
-    }
-
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
-    exit();
+    if ($method !== 'POST') jsonError('Method not allowed', 405);
+    $input = getRequestData();
+    checkProductCsrf($input);
+    $action = strtoupper(trim((string)($input['action'] ?? '')));
+    $description = trim((string)($input['description'] ?? ''));
+    $entityType = trim((string)($input['entity_type'] ?? ''));
+    $entityId = isset($input['entity_id']) ? trim((string)$input['entity_id']) : null;
+    if (!preg_match('/^[A-Z][A-Z0-9_]{0,99}$/', $action) || $description === '' || mb_strlen($description) > 10000 || mb_strlen($entityType) > 50 || mb_strlen($entityId ?? '') > 100) jsonError('Provide a valid action and description.', 422);
+    $id = 'log-' . bin2hex(random_bytes(12));
+    $query = $pdo->prepare('INSERT INTO user_activity_logs (id,user_id,user_name,role,action,description,entity_type,entity_id,ip_address) VALUES (?,?,?,?,?,?,?,?,?)');
+    $query->execute([$id,$user['id'],$user['name'],$user['role'],$action,$description,$entityType ?: null,$entityId,$_SERVER['REMOTE_ADDR'] ?? '']);
+    jsonResponse(['log_id'=>$id],201);
+} catch (PDOException $error) {
+    error_log('Activity logs: '.$error->getMessage());
+    jsonError('Unable to load or save activity logs. Please try again.',500);
 }
