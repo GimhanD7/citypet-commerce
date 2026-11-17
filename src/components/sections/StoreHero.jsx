@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sparkles,
-  Star,
   Truck,
 } from 'lucide-react'
 import storeHeroImg from '../../assets/store-hero-exact.png'
@@ -68,33 +67,11 @@ export default function StoreHero({ onShopNow, onBrowseCategories }) {
           </div>
         </div>
 
-        {/* Right Stage Visual with Modern Glass Badges */}
+        {/* Right Stage Visual (Unobstructed & Clean) */}
         <div className="store-hero-stage">
           <div className="store-hero-stage-inner">
             {/* Ambient Back Glow Ring */}
             <div className="store-hero-backdrop-circle" aria-hidden="true" />
-
-            {/* Modern Floating Glass Badge: Rating */}
-            <div className="store-modern-glass-badge badge-top">
-              <div className="badge-glass-icon gold">
-                <Star size={16} fill="#f59e0b" stroke="#f59e0b" />
-              </div>
-              <div className="badge-glass-text">
-                <strong>4.9 / 5.0 Rating</strong>
-                <small>1,200+ Pet Parents</small>
-              </div>
-            </div>
-
-            {/* Modern Floating Glass Badge: Stock & Authenticity */}
-            <div className="store-modern-glass-badge badge-bottom">
-              <div className="badge-glass-icon teal">
-                <Sparkles size={16} />
-              </div>
-              <div className="badge-glass-text">
-                <strong>610+ Hospital Items</strong>
-                <small>Fresh & Genuine Stock</small>
-              </div>
-            </div>
 
             {/* Main Stage Image */}
             <div className="store-hero-image-wrapper">
