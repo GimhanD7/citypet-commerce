@@ -530,9 +530,10 @@ img { display: block; max-width: 100%; }
   background: rgba(0, 147, 155, 0.08);
   border: 1px solid rgba(0, 147, 155, 0.2);
   color: #057076;
+  font-family: 'Nunito', sans-serif;
   font-size: 11.5px;
-  font-weight: 750;
-  letter-spacing: .08em;
+  font-weight: 800;
+  letter-spacing: .12em;
   text-transform: uppercase;
   margin-bottom: 20px;
 }
@@ -549,32 +550,50 @@ img { display: block; max-width: 100%; }
 }
 .store-hero-title {
   margin: 0 0 18px;
-  line-height: 1.08;
-  letter-spacing: -0.035em;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
 }
 .store-title-line {
   display: block;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: clamp(38px, 4.4vw, 58px);
-  font-weight: 800;
-  color: #0f2d2d;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(42px, 4.6vw, 64px);
+  font-weight: 900;
+  color: #123838;
 }
-.store-title-gradient {
+.store-title-script-wrap {
   display: inline-block;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: clamp(38px, 4.4vw, 58px);
-  font-weight: 800;
-  background: linear-gradient(135deg, #00877f 0%, #02a393 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  position: relative;
+  margin-top: 4px;
+}
+.store-title-script {
+  display: inline-block;
+  font-family: 'Caveat', cursive;
+  font-size: clamp(58px, 6.2vw, 90px);
+  font-weight: 700;
+  color: #04959d;
+  letter-spacing: -.03em;
+  line-height: .9;
+  position: relative;
+}
+.store-title-script::after {
+  content: '';
+  position: absolute;
+  left: 2%;
+  right: 0;
+  bottom: -3px;
+  height: 4px;
+  border-radius: 999px;
+  background: #04959d;
+  transform: rotate(-1.5deg);
 }
 .store-hero-desc {
+  font-family: 'DM Sans', sans-serif;
   font-size: 16px;
   line-height: 1.68;
   color: #4b6865;
   max-width: 500px;
   margin: 0 0 32px;
-  font-weight: 450;
+  font-weight: 500;
 }
 .store-hero-actions {
   display: flex;
@@ -588,8 +607,9 @@ img { display: block; max-width: 100%; }
   min-height: 52px;
   padding: 0 28px;
   border-radius: 999px;
-  font-size: 14.5px;
-  font-weight: 750;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -612,8 +632,9 @@ img { display: block; max-width: 100%; }
   min-height: 52px;
   padding: 0 24px;
   border-radius: 999px;
-  font-size: 14.5px;
-  font-weight: 750;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
   display: inline-flex;
   align-items: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
@@ -722,15 +743,17 @@ img { display: block; max-width: 100%; }
   text-align: left;
 }
 .badge-glass-text strong {
-  font-size: 13px;
-  font-weight: 750;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13.5px;
+  font-weight: 800;
   color: #0f2d2d;
   line-height: 1.2;
 }
 .badge-glass-text small {
+  font-family: 'DM Sans', sans-serif;
   font-size: 11px;
   color: #5c7976;
-  font-weight: 500;
+  font-weight: 600;
 }
 .store-hero-image-wrapper {
   background: transparent;

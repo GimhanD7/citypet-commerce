@@ -26,7 +26,9 @@ export default function StoreHero({ onShopNow, onBrowseCategories }) {
           <h1 className="store-hero-title">
             <span className="store-title-line">Everything your pet</span>
             <span className="store-title-line">needs, in one</span>
-            <span className="store-title-gradient">caring place.</span>
+            <span className="store-title-script-wrap">
+              <span className="store-title-script">caring place.</span>
+            </span>
           </h1>
 
           <p className="store-hero-desc">
