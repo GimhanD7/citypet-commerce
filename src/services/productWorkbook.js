@@ -206,3 +206,147 @@ export async function readProductWorkbook(buffer, categories) {
   }
   return { rows: [...products.values()], errors }
 }
+
+export async function exportProductsToWorkbook(products = [], categories = []) {
+  const book = await workbook()
+  const catMap = new Map((categories || []).map((c) => [c.id, c.name]))
+
+  // 1. Products Sheet
+  const prodHeaders = [
+    'SKU',
+    'Product Name',
+    'Full Name',
+    'Brand',
+    'Category',
+    'Category ID',
+    'Pet Type',
+    'Price (LKR)',
+    'Original Price (LKR)',
+    'Stock Units',
+    'In Stock',
+    'Stock Status',
+    'Location',
+    'Badge',
+    'Tag',
+    'Tags',
+    'Variants Summary',
+    'Short Description',
+  ]
+
+  const prodRows = products.map((p) => {
+    const qty = p.stockCount !== undefined ? Number(p.stockCount) : (p.inStock ? 15 : 0)
+    const inStockStr = (qty > 0 && p.inStock) ? 'Yes' : 'No'
+    const statusStr = qty === 0 || !p.inStock ? 'Out of Stock' : qty <= 5 ? 'Low Stock' : 'In Stock'
+    const catName = catMap.get(p.category) || p.category || ''
+    const tagsStr = Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '')
+    const variantsStr = Array.isArray(p.sizes) && p.sizes.length > 0
+      ? p.sizes.map((s) => `${s.size || 'Size'}: ${s.stockCount ?? 0}u (LKR ${s.price || p.price})`).join(' | ')
+      : 'None'
+
+    return [
+      p.id || '',
+      p.name || '',
+      p.fullName || p.name || '',
+      p.brand || 'City Pet',
+      catName,
+      p.category || '',
+      p.petType || 'dogs',
+      Number(p.price) || 0,
+      p.originalPrice ? Number(p.originalPrice) : '',
+      qty,
+      inStockStr,
+      statusStr,
+      p.stockLocation || 'Colombo 07 Central Pharmacy',
+      p.badge || '',
+      p.tag || '',
+      tagsStr,
+      variantsStr,
+      p.shortDescription || (Array.isArray(p.description) ? p.description[0] : p.description) || '',
+    ]
+  })
+
+  const prodSheet = addSheet(book, 'Products', prodHeaders, prodRows)
+  prodSheet.getColumn(1).numFmt = '@' // SKU as text
+  prodSheet.getColumn(8).numFmt = '#,##0.00' // Price
+  prodSheet.getColumn(9).numFmt = '#,##0.00' // Original Price
+  prodSheet.getColumn(10).numFmt = '#,##0' // Stock Units
+  prodSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: prodHeaders.length } }
+
+  // Adjust widths dynamically
+  prodSheet.columns = prodHeaders.map((header, idx) => {
+    let maxLen = header.length
+    for (let r = 0; r < Math.min(prodRows.length, 100); r++) {
+      const val = prodRows[r][idx]
+      if (val != null) {
+        maxLen = Math.max(maxLen, String(val).length)
+      }
+    }
+    return {
+      header,
+      width: Math.min(50, Math.max(14, maxLen + 3)),
+    }
+  })
+
+  // 2. Variants Sheet (for multi-variant products)
+  const variantHeaders = ['SKU', 'Product Name', 'Size / Variant', 'Price (LKR)', 'Stock Units', 'Is Default']
+  const variantRows = []
+  products.forEach((p) => {
+    if (Array.isArray(p.sizes) && p.sizes.length > 0) {
+      p.sizes.forEach((s) => {
+        variantRows.push([
+          p.id || '',
+          p.name || '',
+          s.size || '',
+          Number(s.price || p.price) || 0,
+          Number(s.stockCount) || 0,
+          s.default ? 'Yes' : 'No',
+        ])
+      })
+    }
+  })
+
+  if (variantRows.length > 0) {
+    const varSheet = addSheet(book, 'Variants', variantHeaders, variantRows)
+    varSheet.getColumn(1).numFmt = '@'
+    varSheet.getColumn(4).numFmt = '#,##0.00'
+    varSheet.getColumn(5).numFmt = '#,##0'
+    varSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: variantHeaders.length } }
+  }
+
+  // 3. Category Summary Sheet
+  if (categories && categories.length > 0) {
+    const catHeaders = ['Category ID', 'Category Name', 'Total Items', 'Total Stock Units']
+    const catRows = categories.filter((c) => c.id !== 'all').map((c) => {
+      const prodsInCat = products.filter(
+        (p) => p.category === c.id || (c.id === 'foods' && p.category === 'food') || (c.id === 'shampoo' && p.category === 'grooming')
+      )
+      const stockInCat = prodsInCat.reduce(
+        (acc, p) => acc + (p.stockCount !== undefined ? Number(p.stockCount) : (p.inStock ? 15 : 0)),
+        0
+      )
+      return [c.id, c.name, prodsInCat.length, stockInCat]
+    })
+    const catSheet = addSheet(book, 'Categories Summary', catHeaders, catRows)
+    catSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: catHeaders.length } }
+  }
+
+  return book.xlsx.writeBuffer()
+}
+
+export async function exportProductsToExcel(products = [], categories = [], filename = '') {
+  const dateStr = new Date().toISOString().slice(0, 10)
+  const safeFilename = filename || `CityPet_Products_Inventory_${dateStr}.xlsx`
+  const buffer = await exportProductsToWorkbook(products, categories)
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = safeFilename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return safeFilename
+}

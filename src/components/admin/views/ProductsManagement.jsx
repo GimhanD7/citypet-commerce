@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Boxes,
   CheckCircle2,
+  Download,
   Filter,
   FileSpreadsheet,
   Minus,
@@ -21,6 +22,8 @@ import {
 } from 'lucide-react'
 
 import royalCaninImg from '../../../assets/pdp-royal-canin-main.jpg'
+import { exportProductsToExcel } from '../../../services/productWorkbook'
+import { storeCategories } from '../../../data/storeData'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -320,6 +323,21 @@ export default function ProductsManagement({
   const [stockStatusFilter, setStockStatusFilter] = useState('all')
   // null | product object
   const [restockingProduct, setRestockingProduct] = useState(null)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportExcel = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const prodsToExport = filtered.length > 0 ? filtered : adminProducts
+      await exportProductsToExcel(prodsToExport, storeCategories)
+    } catch (err) {
+      console.error('Failed to export Excel:', err)
+      alert('Could not export Excel workbook. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // ── KPI Calculations ──
   const totalStockUnits = adminProducts.reduce((s, p) => s + getStockQty(p), 0)
@@ -370,6 +388,16 @@ export default function ProductsManagement({
           </p>
         </div>
         <div className="pm-header-actions">
+          <button
+            type="button"
+            className="apm-cancel-btn pm-export-btn"
+            onClick={handleExportExcel}
+            disabled={exporting}
+            title={`Export ${filtered.length} products to Excel (.xlsx)`}
+          >
+            <Download size={16} />
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
           <button type="button" className="apm-cancel-btn" onClick={handleOpenImportProducts}>
             <FileSpreadsheet size={16} />
             Import Excel

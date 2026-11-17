@@ -40,6 +40,8 @@ import {
   userService,
   activityService,
 } from '../../../services/api'
+import { exportProductsToExcel } from '../../../services/productWorkbook'
+import { storeCategories } from '../../../data/storeData'
 import './settings.css'
 
 // Default hospital portal settings
@@ -241,6 +243,20 @@ export default function SettingsView({
   }
 
   // Export Data Handlers
+  const handleExportProductsExcel = async () => {
+    if (!adminProducts || !adminProducts.length) {
+      showToast('No products available to export.')
+      return
+    }
+    try {
+      await exportProductsToExcel(adminProducts, storeCategories)
+      showToast(`Exported ${adminProducts.length} products to Excel (.xlsx)!`)
+    } catch (err) {
+      console.error('Failed to export Excel:', err)
+      showToast('Could not export Excel workbook.')
+    }
+  }
+
   const handleExportProductsCsv = () => {
     if (!adminProducts || !adminProducts.length) {
       showToast('No products available to export.')
@@ -835,6 +851,14 @@ export default function SettingsView({
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    className="data-pill-btn primary"
+                    onClick={handleExportProductsExcel}
+                    title="Export Products as Microsoft Excel Workbook (.xlsx)"
+                  >
+                    <Download size={13} /> Excel (.xlsx)
+                  </button>
                   <button
                     type="button"
                     className="data-pill-btn outline"

@@ -108,3 +108,19 @@
 .product-import-report { padding: .875rem; background: #f2f8f7; color: #143b3b; border-radius: .6rem; }
 .product-import-report ul { margin: .5rem 0 0; padding-left: 1.25rem; list-style: disc; max-height: 12rem; overflow: auto; overflow-wrap: anywhere; }
 .product-import-dialog button:disabled { cursor: not-allowed; opacity: .6; }
+
+.pm-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  border: 1px solid #cce8e5;
+  color: #075f5b;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.pm-export-btn:hover:not(:disabled) {
+  background: #f0f9f8;
+  border-color: #0d827c;
+  color: #054845;
+}
