@@ -6,37 +6,11 @@ import {
   Phone,
   Sparkles,
   Stethoscope,
-  Activity,
   Microscope,
   Heart,
 } from 'lucide-react'
 import { services } from '../../data/siteData'
-
-function LottieServiceVisual({ lottieUrl, Icon, bg, color }) {
-  const [lottieFailed, setLottieFailed] = useState(false)
-
-  return (
-    <div className="modern-service-visual" style={{ background: bg, color: color }}>
-      <div className="service-visual-glow" style={{ background: color }} aria-hidden="true" />
-      {!lottieFailed && lottieUrl ? (
-        <lottie-player
-          src={lottieUrl}
-          background="transparent"
-          speed="1"
-          style={{ width: '52px', height: '52px' }}
-          loop
-          autoplay
-          onError={() => setLottieFailed(true)}
-          className="service-lottie-item"
-        ></lottie-player>
-      ) : (
-        <div className="service-lucide-fallback">
-          <Icon size={24} strokeWidth={2.2} />
-        </div>
-      )}
-    </div>
-  )
-}
+import ServiceLottieVisual from './ServiceLottieVisual'
 
 const CATEGORIES = [
   { id: 'all', label: 'All Services', icon: Sparkles },
@@ -139,12 +113,10 @@ export default function Services() {
               >
                 {/* Top Row: Lottie Animation Visual & Pill Meta */}
                 <div className="modern-service-card-top">
-                  <LottieServiceVisual
-                    lottieUrl={service.lottie}
-                    Icon={service.icon}
-                    bg={service.bg}
-                    color={service.color}
-                  />
+                  <div className="modern-service-visual" style={{ background: service.bg, color: service.color }}>
+                    <div className="service-visual-glow" style={{ background: service.color }} aria-hidden="true" />
+                    <ServiceLottieVisual id={service.id} color={service.color} bg={service.bg} />
+                  </div>
                   <div className="modern-service-meta">
                     <span className="modern-service-num">{numberFormatted}</span>
                     {service.tag && (

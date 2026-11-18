@@ -389,6 +389,393 @@ img { display: block; max-width: 100%; }
   50% { transform: scale(1.06); }
 }
 
+/* Service Micro-Lottie Visual Elements & Animations */
+.lottie-anim-wrap {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.lottie-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* 01. Medicine & Treatments */
+.anim-floating-cross {
+  animation: floatCross 2.8s ease-in-out infinite;
+}
+.anim-stetho-tube {
+  transform-origin: 32px 30px;
+  animation: stethoFlex 3s ease-in-out infinite;
+}
+.anim-stetho-bell {
+  transform-origin: 32px 49px;
+  animation: bellPulse 2s ease-in-out infinite;
+}
+.anim-pulse-ear {
+  animation: earPulse 2s ease-in-out infinite;
+}
+@keyframes floatCross {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes stethoFlex {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@keyframes bellPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes earPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* 02. Animal Surgeries */
+.anim-heart-beat {
+  transform-origin: 32px 30px;
+  animation: heartPulseBeating 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+.anim-ecg-active {
+  stroke-dasharray: 45;
+  stroke-dashoffset: 45;
+  animation: ecgScan 2.2s linear infinite;
+}
+.anim-siren-dot {
+  animation: sirenFlash 1s ease-in-out infinite;
+}
+@keyframes heartPulseBeating {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.12); }
+  28% { transform: scale(1.02); }
+  42% { transform: scale(1.1); }
+  70% { transform: scale(1); }
+}
+@keyframes ecgScan {
+  0% { stroke-dashoffset: 45; opacity: 0.2; }
+  30% { stroke-dashoffset: 0; opacity: 1; }
+  70% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: -45; opacity: 0.2; }
+}
+
+/* 03. Laboratory */
+.anim-microscope-tilt {
+  transform-origin: 29px 23px;
+  animation: microTilt 3.2s ease-in-out infinite;
+}
+.anim-bubble-1 {
+  animation: floatBubble 2.2s ease-in-out infinite;
+}
+.anim-bubble-2 {
+  animation: floatBubble 2.8s ease-in-out 0.4s infinite;
+}
+.anim-bubble-3 {
+  animation: floatBubble 2.5s ease-in-out 0.8s infinite;
+}
+@keyframes microTilt {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-4deg); }
+}
+@keyframes floatBubble {
+  0% { transform: translateY(3px); opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { transform: translateY(-6px); opacity: 0; }
+}
+
+/* 04. Counseling */
+.anim-shield-shimmer {
+  animation: shieldPulse 3s ease-in-out infinite;
+}
+.anim-paw-pulse {
+  transform-origin: 32px 30px;
+  animation: pawBeat 2.2s ease-in-out infinite;
+}
+.anim-sparkle-dot-1 {
+  animation: twinkle 1.8s ease-in-out infinite;
+}
+.anim-sparkle-dot-2 {
+  animation: twinkle 1.8s ease-in-out 0.9s infinite;
+}
+@keyframes shieldPulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+@keyframes pawBeat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+/* 05. Foods & Accessories */
+.anim-bone-bob {
+  transform-origin: 32px 18px;
+  animation: boneBob 2.6s ease-in-out infinite;
+}
+.anim-steam-1 {
+  animation: steamRise 2.2s ease-out infinite;
+}
+.anim-steam-2 {
+  animation: steamRise 2.2s ease-out 0.8s infinite;
+}
+.anim-bowl-rock {
+  transform-origin: 32px 48px;
+  animation: bowlRock 4s ease-in-out infinite;
+}
+@keyframes boneBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3.5px) rotate(4deg); }
+}
+@keyframes steamRise {
+  0% { transform: translateY(2px); opacity: 0; }
+  40% { opacity: 0.7; }
+  100% { transform: translateY(-5px); opacity: 0; }
+}
+@keyframes bowlRock {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(1deg); }
+  75% { transform: rotate(-1deg); }
+}
+
+/* 06. Mobile Service */
+.anim-van-bounce {
+  animation: vanBounce 1.4s ease-in-out infinite;
+}
+.anim-siren-flash {
+  animation: sirenFlash 0.7s ease-in-out infinite;
+}
+.anim-wheel-spin {
+  animation: wheelRotate 1.5s linear infinite;
+}
+.anim-road-dash-1 {
+  animation: roadDash 1.2s linear infinite;
+}
+.anim-road-dash-2 {
+  animation: roadDash 1.2s linear 0.4s infinite;
+}
+.anim-road-dash-3 {
+  animation: roadDash 1.2s linear 0.8s infinite;
+}
+@keyframes vanBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+@keyframes sirenFlash {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 3px #ea580c); }
+}
+@keyframes wheelRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes roadDash {
+  0% { opacity: 0.2; transform: translateX(4px); }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.2; transform: translateX(-4px); }
+}
+
+/* 07. Boarding & Warding */
+.anim-smoke-1 {
+  animation: smokePuff 2.4s ease-out infinite;
+}
+.anim-smoke-2 {
+  animation: smokePuff 2.4s ease-out 0.8s infinite;
+}
+.anim-smoke-3 {
+  animation: smokePuff 2.4s ease-out 1.6s infinite;
+}
+.anim-roof-sway {
+  transform-origin: 32px 15px;
+  animation: roofCozy 4s ease-in-out infinite;
+}
+.anim-pet-ears {
+  transform-origin: 32px 40px;
+  animation: earsPerk 2.6s ease-in-out infinite;
+}
+@keyframes smokePuff {
+  0% { transform: translateY(0) scale(0.8); opacity: 0.6; }
+  100% { transform: translateY(-6px) scale(1.4); opacity: 0; }
+}
+@keyframes roofCozy {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+@keyframes earsPerk {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-2px); }
+  60% { transform: translateY(0); }
+}
+
+/* 08. Grooming & Bathing */
+.anim-shower-drops, .anim-shower-drops-2 {
+  animation: waterRain 1.2s linear infinite;
+}
+.anim-float-bubble-1 {
+  animation: soapBubble 3s ease-in-out infinite;
+}
+.anim-float-bubble-2 {
+  animation: soapBubble 2.5s ease-in-out 0.6s infinite;
+}
+.anim-float-bubble-3 {
+  animation: soapBubble 3.2s ease-in-out 1.2s infinite;
+}
+.anim-tub-wobble {
+  transform-origin: 32px 42px;
+  animation: tubFloat 3.8s ease-in-out infinite;
+}
+@keyframes waterRain {
+  0% { stroke-dashoffset: 0; opacity: 0.2; }
+  50% { opacity: 0.9; }
+  100% { stroke-dashoffset: -8; opacity: 0.2; }
+}
+@keyframes soapBubble {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.1); }
+}
+@keyframes tubFloat {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(1deg); }
+  75% { transform: rotate(-1deg); }
+}
+
+/* 09. Pharmacy */
+.anim-spin-slow {
+  transform-origin: 32px 32px;
+  animation: spinSlow 14s linear infinite;
+}
+.anim-pill-float {
+  transform-origin: 30px 32px;
+  animation: pillFloat 3.2s ease-in-out infinite;
+}
+.anim-sparkle-spin {
+  transform-origin: 44px 24px;
+  animation: sparkleTwirl 2.4s ease-in-out infinite;
+}
+@keyframes spinSlow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes pillFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(8deg); }
+}
+@keyframes sparkleTwirl {
+  0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.3; }
+  50% { transform: scale(1.2) rotate(90deg); opacity: 1; }
+}
+
+/* 10. Post Mortem */
+.anim-liquid-wave {
+  animation: liquidBob 2.4s ease-in-out infinite;
+}
+.anim-liquid-wave-reverse {
+  animation: liquidBob 2.4s ease-in-out 1.2s infinite;
+}
+@keyframes liquidBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 11. Public Awareness */
+.anim-wave-1 {
+  animation: wavePulse 1.8s ease-out infinite;
+}
+.anim-wave-2 {
+  animation: wavePulse 1.8s ease-out 0.35s infinite;
+}
+.anim-wave-3 {
+  animation: wavePulse 1.8s ease-out 0.7s infinite;
+}
+.anim-megaphone-shake {
+  transform-origin: 24px 31px;
+  animation: megaShake 2.6s ease-in-out infinite;
+}
+@keyframes wavePulse {
+  0% { opacity: 0; transform: translateX(-2px); }
+  50% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(3px); }
+}
+@keyframes megaShake {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(-3deg); }
+  20% { transform: rotate(2deg); }
+  30% { transform: rotate(0deg); }
+}
+
+/* 12. Behaviour Advising */
+.anim-float-heart {
+  transform-origin: 40px 18px;
+  animation: floatHeart 2.2s ease-in-out infinite;
+}
+.anim-dog-tail {
+  transform-origin: 44px 42px;
+  animation: tailWagWag 0.7s ease-in-out infinite alternate;
+}
+.anim-dog-head {
+  transform-origin: 22px 30px;
+  animation: dogNod 2.8s ease-in-out infinite;
+}
+@keyframes floatHeart {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.15); }
+}
+@keyframes tailWagWag {
+  0% { transform: rotate(-8deg); }
+  100% { transform: rotate(14deg); }
+}
+@keyframes dogNod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(-3deg); }
+}
+
+/* 13. Ultrasound Scan */
+.anim-sonar-1 {
+  animation: sonarRadar 2.2s ease-out infinite;
+}
+.anim-sonar-2 {
+  animation: sonarRadar 2.2s ease-out 0.55s infinite;
+}
+.anim-sonar-3 {
+  animation: sonarRadar 2.2s ease-out 1.1s infinite;
+}
+.anim-probe-sweep {
+  transform-origin: 32px 14px;
+  animation: probeSweep 3.2s ease-in-out infinite;
+}
+@keyframes sonarRadar {
+  0% { opacity: 0; transform: scale(0.96); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+@keyframes probeSweep {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(6deg); }
+  75% { transform: rotate(-6deg); }
+}
+
+/* 14. X-Ray Diagnostics */
+.anim-xray-laser {
+  animation: xraySweep 2.2s ease-in-out infinite alternate;
+}
+.anim-xray-bone {
+  animation: boneGlow 2.5s ease-in-out infinite;
+}
+@keyframes xraySweep {
+  0% { transform: translateY(2px); opacity: 0.5; }
+  100% { transform: translateY(32px); opacity: 1; filter: drop-shadow(0 0 4px #38bdf8); }
+}
+@keyframes boneGlow {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8)); }
+}
+
 /* Meta: Number & Tag */
 .modern-service-meta {
   display: flex;
