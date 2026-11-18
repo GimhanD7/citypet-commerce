@@ -116,23 +116,420 @@ img { display: block; max-width: 100%; }
 .care-values b { font-family: 'Nunito', sans-serif; font-size: 14px; }
 .care-values small { color: var(--ink-soft); margin-top: 2px; }
 
-.services-section { background: #fff; }
-.services-intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; margin-bottom: 44px; }
-.service-callout { border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; min-width: 220px; }
-.service-callout > svg { color: var(--coral); }
-.service-callout div { display: flex; flex-direction: column; }
-.service-callout span { font-size: 10px; color: var(--ink-soft); }
-.service-callout a { font-size: 12px; font-weight: 800; margin-top: 1px; }
-.services-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; }
-.service-card { position: relative; min-height: 232px; padding: 23px; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; transition: .25s ease; animation: serviceIn .45s both; animation-delay: var(--delay); }
-.service-card:hover { background: var(--mint-2); border-color: rgba(13,92,90,.22); transform: translateY(-4px); }
-.service-icon { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; background: var(--mint); color: var(--teal); }
-.service-card:nth-child(4n+2) .service-icon { background: #fff0e7; color: #bf6458; }
-.service-card:nth-child(4n+3) .service-icon { background: #f0edfb; color: #675b9a; }
-.service-card h3 { font-family: 'Nunito', sans-serif; font-size: 17px; margin: 18px 0 8px; }
-.service-card p { font-size: 12px; line-height: 1.65; color: var(--ink-soft); margin: 0; }
-.service-number { position: absolute; right: 16px; top: 17px; color: rgba(13,92,90,.21); font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 12px; }
-.show-services { margin: 26px auto 0; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--teal); font-weight: 900; cursor: pointer; }
+/* ============================================================
+   MODERN SERVICES SECTION WITH LOTTIEFILES ANIMATIONS
+   ============================================================ */
+.modern-services-section {
+  position: relative;
+  background: radial-gradient(circle at 85% 15%, rgba(225, 246, 243, 0.5) 0%, #ffffff 65%);
+  padding: 85px 0 70px;
+  overflow: hidden;
+}
+.modern-services-bg-glow {
+  position: absolute;
+  top: -80px;
+  right: -100px;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(162, 230, 222, 0.28) 0%, rgba(225, 246, 243, 0) 70%);
+  pointer-events: none;
+  filter: blur(50px);
+}
+.modern-services-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 36px;
+  margin-bottom: 40px;
+}
+.modern-services-header-left {
+  max-width: 680px;
+}
+.modern-services-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(0, 147, 155, 0.08);
+  border: 1px solid rgba(0, 147, 155, 0.2);
+  color: #057076;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.services-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00a896;
+  box-shadow: 0 0 0 3px rgba(0, 168, 150, 0.25);
+  animation: dotPulse 2.2s infinite;
+}
+.modern-services-title {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(32px, 3.8vw, 48px);
+  font-weight: 800;
+  color: #0f2d2d;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin: 0 0 14px;
+}
+.services-title-script {
+  font-family: 'Caveat', cursive;
+  font-size: 1.18em;
+  font-weight: 700;
+  color: #04959d;
+  display: inline-block;
+}
+.modern-services-subtitle {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #4f6e6a;
+  margin: 0 0 24px;
+  max-width: 580px;
+}
+
+/* Category Filter Pills */
+.modern-services-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.modern-services-cat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(13, 92, 90, 0.14);
+  color: #385a56;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(13, 92, 90, 0.03);
+}
+.modern-services-cat-btn:hover {
+  background: #eef9f7;
+  border-color: #00a896;
+  color: #065b5c;
+  transform: translateY(-1px);
+}
+.modern-services-cat-btn.is-active {
+  background: #065b5c;
+  border-color: #065b5c;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(6, 91, 92, 0.25);
+}
+.modern-services-cat-btn.is-active .cat-btn-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+.cat-btn-count {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(13, 92, 90, 0.08);
+  font-size: 10.5px;
+  font-weight: 750;
+  color: #065b5c;
+}
+
+/* Service Callout Card (Phone & Emergency) */
+.modern-service-callout-card {
+  background: #ffffff;
+  border: 1px solid rgba(13, 92, 90, 0.12);
+  border-radius: 20px;
+  padding: 16px 20px;
+  min-width: 250px;
+  box-shadow: 0 8px 24px rgba(13, 92, 90, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.modern-service-callout-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(13, 92, 90, 0.09);
+}
+.service-callout-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 750;
+  color: #059669;
+  margin-bottom: 10px;
+}
+.service-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  animation: dotPulse 2s infinite;
+}
+.service-callout-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.service-callout-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #fff1ec;
+  color: #ea580c;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.service-callout-texts {
+  display: flex;
+  flex-direction: column;
+}
+.service-callout-label {
+  font-size: 11px;
+  color: #638581;
+  font-weight: 500;
+}
+.service-callout-link {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #065b5c;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.service-callout-link:hover {
+  color: #0284c7;
+}
+.service-callout-phone {
+  font-size: 11px;
+  color: #8da4a0;
+  font-weight: 600;
+}
+
+/* Modern Services Grid */
+.modern-services-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* Modern Service Card */
+.modern-service-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgba(13, 92, 90, 0.1);
+  border-radius: 22px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 250px;
+  overflow: hidden;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(13, 92, 90, 0.03);
+}
+.modern-service-card:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fcfa 100%);
+  border-color: rgba(0, 168, 150, 0.35);
+  transform: translateY(-5px);
+  box-shadow: 0 16px 36px rgba(13, 92, 90, 0.09);
+}
+
+.modern-service-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+/* Lottie & Icon Visual Container */
+.modern-service-visual {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.modern-service-card:hover .modern-service-visual {
+  transform: scale(1.08) rotate(3deg);
+}
+.service-visual-glow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  opacity: 0.15;
+  filter: blur(8px);
+  transition: opacity 0.25s ease;
+}
+.modern-service-card:hover .service-visual-glow {
+  opacity: 0.3;
+}
+.service-lottie-item {
+  width: 52px !important;
+  height: 52px !important;
+  display: block;
+}
+.service-lucide-fallback {
+  display: grid;
+  place-items: center;
+  animation: pulseIcon 3s ease-in-out infinite;
+}
+
+@keyframes pulseIcon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+/* Meta: Number & Tag */
+.modern-service-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.modern-service-num {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 12.5px;
+  color: rgba(13, 92, 90, 0.25);
+  letter-spacing: 0.05em;
+  transition: color 0.2s ease;
+}
+.modern-service-card:hover .modern-service-num {
+  color: #065b5c;
+}
+.modern-service-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+/* Card Body */
+.modern-service-card-body {
+  flex-grow: 1;
+}
+.modern-service-name {
+  font-family: 'Nunito', sans-serif;
+  font-size: 17.5px;
+  font-weight: 850;
+  color: #123838;
+  margin: 0 0 8px;
+  line-height: 1.25;
+  transition: color 0.2s ease;
+}
+.modern-service-card:hover .modern-service-name {
+  color: #065b5c;
+}
+.modern-service-desc {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #557571;
+  margin: 0;
+}
+
+/* Card Footer Action */
+.modern-service-card-footer {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(13, 92, 90, 0.06);
+}
+.modern-service-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 750;
+  color: #065b5c;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.modern-service-action-link:hover {
+  color: #0284c7;
+  gap: 9px;
+}
+.service-link-arrow {
+  transition: transform 0.2s ease;
+}
+.modern-service-action-link:hover .service-link-arrow {
+  transform: translateX(3px);
+}
+
+/* Footer Action Button (View All) */
+.modern-services-footer-action {
+  margin-top: 36px;
+  display: flex;
+  justify-content: center;
+}
+.modern-show-services-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(6, 91, 92, 0.2);
+  color: #065b5c;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 4px 14px rgba(6, 91, 92, 0.08);
+}
+.modern-show-services-btn:hover {
+  background: #065b5c;
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(6, 91, 92, 0.22);
+  transform: translateY(-2px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1050px) {
+  .modern-services-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .modern-services-section {
+    padding: 60px 0 50px;
+  }
+  .modern-services-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+  .modern-services-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .modern-service-card {
+    padding: 18px;
+    min-height: auto;
+  }
+  .modern-service-name {
+    font-size: 15px;
+  }
+  .modern-service-desc {
+    font-size: 11.5px;
+  }
+}
+@media (max-width: 480px) {
+  .modern-services-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 .promise-section { padding-top: 22px; }
 .promise-panel { position: relative; overflow: hidden; border-radius: 36px; background: var(--teal); color: white; padding: 64px 65px; display: grid; grid-template-columns: 1.5fr .7fr; gap: 60px; align-items: end; }
