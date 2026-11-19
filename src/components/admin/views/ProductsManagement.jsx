@@ -1,10 +1,14 @@
 import { mediaUrl } from '../../../config/media'
 import './operations.css'
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   Boxes,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Download,
   Filter,
   FileSpreadsheet,
@@ -49,6 +53,23 @@ function stockState(qty) {
   if (qty === 0) return 'out'
   if (qty <= 5) return 'low'
   return 'ok'
+}
+
+/**
+ * Builds a friendly pagination numbers array with ellipses.
+ * e.g. [1, 2, 3, 4, 5, '...', 56]
+ */
+function generatePageNumbers(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total]
+  }
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  }
+  return [1, '...', current - 1, current, current + 1, '...', total]
 }
 
 const CATEGORY_LABELS = {
@@ -346,27 +367,58 @@ export default function ProductsManagement({
   const inStockCount    = adminProducts.length - outOfStockItems.length
 
   // ── Filtering ──
-  const filtered = adminProducts.filter((p) => {
-    const qty = getStockQty(p)
-    const q   = productSearch.toLowerCase().trim()
-    const matchSearch = !q ||
-      p.name.toLowerCase().includes(q) ||
-      (p.brand && p.brand.toLowerCase().includes(q)) ||
-      (p.id && p.id.toLowerCase().includes(q)) ||
-      (p.stockLocation && p.stockLocation.toLowerCase().includes(q))
-    const matchCat =
-      productCategoryFilter === 'all' ||
-      p.category === productCategoryFilter ||
-      (productCategoryFilter === 'foods' && (p.category === 'food' || p.category === 'foods')) ||
-      (productCategoryFilter === 'shampoo' && (p.category === 'grooming' || p.category === 'shampoo'))
-    const matchStock =
-      stockStatusFilter === 'all'          ? true :
-      stockStatusFilter === 'in_stock'     ? qty > 5 && p.inStock :
-      stockStatusFilter === 'low_stock'    ? qty > 0 && qty <= 5 && p.inStock :
-      stockStatusFilter === 'out_of_stock' ? qty === 0 || !p.inStock :
-      true
-    return matchSearch && matchCat && matchStock
-  })
+  const filtered = useMemo(() => {
+    return adminProducts.filter((p) => {
+      const qty = getStockQty(p)
+      const q   = productSearch.toLowerCase().trim()
+      const matchSearch = !q ||
+        p.name.toLowerCase().includes(q) ||
+        (p.brand && p.brand.toLowerCase().includes(q)) ||
+        (p.id && p.id.toLowerCase().includes(q)) ||
+        (p.stockLocation && p.stockLocation.toLowerCase().includes(q))
+      const matchCat =
+        productCategoryFilter === 'all' ||
+        p.category === productCategoryFilter ||
+        (productCategoryFilter === 'foods' && (p.category === 'food' || p.category === 'foods')) ||
+        (productCategoryFilter === 'shampoo' && (p.category === 'grooming' || p.category === 'shampoo'))
+      const matchStock =
+        stockStatusFilter === 'all'          ? true :
+        stockStatusFilter === 'in_stock'     ? qty > 5 && p.inStock :
+        stockStatusFilter === 'low_stock'    ? qty > 0 && qty <= 5 && p.inStock :
+        stockStatusFilter === 'out_of_stock' ? qty === 0 || !p.inStock :
+        true
+      return matchSearch && matchCat && matchStock
+    })
+  }, [adminProducts, productSearch, productCategoryFilter, stockStatusFilter])
+
+  // ── Pagination State ──
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reset to first page when search, category, stock filter or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [productSearch, productCategoryFilter, stockStatusFilter, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+
+  // Keep currentPage in valid range if products count changes
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  const startIndex = (validCurrentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, filtered.length)
+  const paginatedProducts = useMemo(() => {
+    return filtered.slice(startIndex, endIndex)
+  }, [filtered, startIndex, endIndex])
+
+  const pageNumbers = useMemo(() => {
+    return generatePageNumbers(validCurrentPage, totalPages)
+  }, [validCurrentPage, totalPages])
 
   // ── Restock confirm handler (supports variantIndex) ──
   const handleRestockConfirm = async (addQty, variantIndex = null) => {
@@ -520,7 +572,7 @@ export default function ProductsManagement({
                   </td>
                 </tr>
               ) : (
-                filtered.map((prod) => {
+                paginatedProducts.map((prod) => {
                   const qty   = getStockQty(prod)
                   const state = stockState(qty)
                   const needsRestock = state === 'out' || state === 'low'
@@ -620,18 +672,108 @@ export default function ProductsManagement({
           </table>
         </div>
 
-        {/* Table footer summary */}
+        {/* Table footer summary & pagination */}
         {filtered.length > 0 && (
           <div className="pm-table-footer">
-            <span>
-              Showing <strong>{filtered.length}</strong> product{filtered.length !== 1 ? 's' : ''}
-            </span>
-            <span className="pm-footer-divider" />
-            <span className="pm-footer-stock-summary">
-              <span className="pm-dot-ok" /> {inStockCount} In Stock &nbsp;
-              <span className="pm-dot-low" /> {lowStockItems.length} Low &nbsp;
-              <span className="pm-dot-out" /> {outOfStockItems.length} Out
-            </span>
+            <div className="pm-footer-left">
+              <span className="pm-footer-showing-txt">
+                Showing <strong>{startIndex + 1}&ndash;{endIndex}</strong> of <strong>{filtered.length}</strong> products
+              </span>
+              <span className="pm-footer-divider" />
+              <span className="pm-footer-stock-summary">
+                <span className="pm-dot-ok" /> {inStockCount} In Stock &nbsp;
+                <span className="pm-dot-low" /> {lowStockItems.length} Low &nbsp;
+                <span className="pm-dot-out" /> {outOfStockItems.length} Out
+              </span>
+            </div>
+
+            <div className="pm-footer-pagination">
+              <div className="pm-page-size-wrap">
+                <span className="pm-page-size-label">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="pm-page-size-select"
+                  aria-label="Products per page"
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                </select>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="pm-page-nav" role="navigation" aria-label="Products table pagination">
+                  <button
+                    type="button"
+                    className="pm-page-btn pm-page-arrow"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={validCurrentPage <= 1}
+                    title="First Page"
+                    aria-label="First Page"
+                  >
+                    <ChevronsLeft size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="pm-page-btn pm-page-arrow"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={validCurrentPage <= 1}
+                    title="Previous Page"
+                    aria-label="Previous Page"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  <div className="pm-page-numbers">
+                    {pageNumbers.map((num, idx) =>
+                      num === '...' ? (
+                        <span key={`dots-${idx}`} className="pm-page-dots">
+                          &hellip;
+                        </span>
+                      ) : (
+                        <button
+                          key={num}
+                          type="button"
+                          className={`pm-page-btn pm-page-num ${num === validCurrentPage ? 'is-active' : ''}`}
+                          onClick={() => setCurrentPage(num)}
+                          aria-current={num === validCurrentPage ? 'page' : undefined}
+                        >
+                          {num}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="pm-page-btn pm-page-arrow"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={validCurrentPage >= totalPages}
+                    title="Next Page"
+                    aria-label="Next Page"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="pm-page-btn pm-page-arrow"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={validCurrentPage >= totalPages}
+                    title="Last Page"
+                    aria-label="Last Page"
+                  >
+                    <ChevronsRight size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

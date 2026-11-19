@@ -124,3 +124,150 @@
   border-color: #0d827c;
   color: #054845;
 }
+
+/* ── Products Management Table Pagination ── */
+.admin-operations-page .pm-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(23, 61, 59, 0.08);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #627e7b;
+  background: #fafcfb;
+}
+
+.admin-operations-page .pm-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-operations-page .pm-footer-showing-txt {
+  color: #2e524f;
+  font-size: 12.5px;
+}
+.admin-operations-page .pm-footer-showing-txt strong {
+  color: #123838;
+  font-weight: 750;
+}
+
+.admin-operations-page .pm-footer-pagination {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-operations-page .pm-page-size-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #627e7b;
+}
+
+.admin-operations-page .pm-page-size-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #627e7b;
+}
+
+.admin-operations-page .pm-page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #d0e0dd;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #173d3b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.admin-operations-page .pm-page-size-select:focus {
+  border-color: #0d827c;
+}
+
+.admin-operations-page .pm-page-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-operations-page .pm-page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.admin-operations-page .pm-page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #d5e5e2;
+  background: #ffffff;
+  color: #173d3b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.admin-operations-page .pm-page-btn:hover:not(:disabled):not(.is-active) {
+  background: #f0f8f7;
+  border-color: #0d827c;
+  color: #065b5c;
+}
+.admin-operations-page .pm-page-btn.is-active {
+  background: #065b5c;
+  border-color: #065b5c;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(6, 91, 92, 0.25);
+  cursor: default;
+}
+.admin-operations-page .pm-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+}
+
+.admin-operations-page .pm-page-arrow {
+  padding: 0 6px;
+}
+
+.admin-operations-page .pm-page-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 32px;
+  color: #8da4a0;
+  font-weight: 800;
+  font-size: 13px;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .admin-operations-page .pm-table-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .admin-operations-page .pm-footer-left,
+  .admin-operations-page .pm-footer-pagination {
+    justify-content: space-between;
+    width: 100%;
+  }
+}
