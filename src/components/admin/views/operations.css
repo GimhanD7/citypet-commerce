@@ -1,7 +1,9 @@
 .admin-operations-page:is(.pm-page, .orders-admin-page, .payments-admin-page) {
   min-width: 0;
+  width: 100%;
   gap: clamp(12px, 1.5vw, 20px);
-  padding: clamp(12px, 2vw, 28px);
+  padding: 0 0 24px 0;
+  background: transparent;
 }
 
 .admin-operations-page :is(.pm-page-header, .orders-page-header, .payments-page-header) {
@@ -32,12 +34,71 @@
 
 .admin-operations-page :is(.pm-table-card, .orders-table-card, .payments-table-card) {
   min-width: 0;
-  border-radius: 14px;
+  width: 100%;
+  border-radius: 16px;
+  flex: 0 0 auto;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible;
+}
+
+.admin-operations-page .pm-table-scroll {
+  width: 100%;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+  overflow-x: auto;
+}
+
+.admin-operations-page .pm-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto;
 }
 
 .admin-operations-page :is(.pm-th, .orders-th, .payments-th),
 .admin-operations-page :is(.pm-td, .orders-td, .payments-td) {
   padding: 9px 12px;
+}
+
+/* Ensure the products table columns flex seamlessly without horizontal scroll */
+.admin-operations-page .pm-th-product,
+.admin-operations-page .pm-td-product {
+  min-width: 0;
+  width: auto;
+}
+.admin-operations-page .pm-th-cat,
+.admin-operations-page .pm-td:nth-child(2) {
+  min-width: 0;
+  width: 14%;
+  white-space: nowrap;
+}
+.admin-operations-page .pm-th-price,
+.admin-operations-page .pm-td-price {
+  min-width: 0;
+  width: 12%;
+  white-space: nowrap;
+}
+.admin-operations-page .pm-th-inv,
+.admin-operations-page .pm-td-inv {
+  min-width: 0;
+  width: 13%;
+  white-space: nowrap;
+}
+.admin-operations-page .pm-th-status,
+.admin-operations-page .pm-td:nth-child(5) {
+  min-width: 0;
+  width: 12%;
+  white-space: nowrap;
+}
+.admin-operations-page .pm-th-actions,
+.admin-operations-page .pm-td-actions {
+  min-width: 0;
+  width: 175px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .admin-operations-page :is(button, select, input):focus-visible {
